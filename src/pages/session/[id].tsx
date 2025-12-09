@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/router";
 import AppLayout from "@/layouts/app-layout";
 import { ModelSelect } from "@/components/model-select";
@@ -47,41 +47,59 @@ export default function SessionPage() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [fileResults, setFileResults] = useState<string[]>([]);
+  const [shouldScrollOnce, setShouldScrollOnce] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const inputContainerRef = useRef<HTMLDivElement>(null);
 
   const fileMention = useFileMention();
 
-  const scrollToBottom = () => {
+  const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  }, []);
 
+  // Scroll once when user sends a message, then reset the flag
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  useEffect(() => {
-    if (sending) {
-      const interval = setInterval(() => {
-        scrollToBottom();
-      }, 100);
-      return () => clearInterval(interval);
+    if (shouldScrollOnce) {
+      scrollToBottom();
+      setShouldScrollOnce(false);
     }
-  }, [sending]);
+  }, [shouldScrollOnce, scrollToBottom]);
 
+  // Handle mobile keyboard - scroll input into view when focused
   useEffect(() => {
-    // Auto-scroll when sending
-    if (sending) {
-      const interval = setInterval(() => {
-        if (chatContainerRef.current) {
-          chatContainerRef.current.scrollTop =
-            chatContainerRef.current.scrollHeight;
-        }
-      }, 100);
-      return () => clearInterval(interval);
-    }
-  }, [sending]);
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const handleFocus = () => {
+      // Small delay to wait for keyboard to appear
+      setTimeout(() => {
+        inputContainerRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "end",
+        });
+      }, 300);
+    };
+
+    // Also handle resize events (keyboard appearing changes viewport)
+    const handleResize = () => {
+      if (document.activeElement === textarea) {
+        inputContainerRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "end",
+        });
+      }
+    };
+
+    textarea.addEventListener("focus", handleFocus);
+    window.visualViewport?.addEventListener("resize", handleResize);
+
+    return () => {
+      textarea.removeEventListener("focus", handleFocus);
+      window.visualViewport?.removeEventListener("resize", handleResize);
+    };
+  }, []);
 
   const fetchMessages = async () => {
     if (!id) return;
@@ -136,6 +154,9 @@ export default function SessionPage() {
     setInput("");
     setSending(true);
 
+    // Trigger scroll once when sending
+    setShouldScrollOnce(true);
+
     try {
       const response = await fetch(`/api/sessions/${id}/prompt`, {
         method: "POST",
@@ -150,6 +171,8 @@ export default function SessionPage() {
       }
 
       await fetchMessages();
+      // Scroll once after receiving response
+      setShouldScrollOnce(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send message");
     } finally {
@@ -177,105 +200,104 @@ export default function SessionPage() {
 
   return (
     <AppLayout>
-      <div className="flex h-[calc(100vh-2rem)] max-h-[calc(100vh-2rem)] flex-col">
+      <div className="flex h-full flex-col">
         {/* Chat container - top part */}
-        <div className="flex-1 overflow-hidden" ref={chatContainerRef}>
-          <div className="w-full h-full overflow-auto">
-            {loading && (
-              <div className="text-center text-muted-fg">
-                Loading messages...
-              </div>
-            )}
+        <div className="flex-1 overflow-auto" ref={chatContainerRef}>
+          {loading && (
+            <div className="text-center text-muted-fg">Loading messages...</div>
+          )}
 
-            {error && (
-              <div className="rounded-md bg-danger-subtle p-4 text-danger-subtle-fg">
-                Error: {error}
-              </div>
-            )}
-
-            {!loading && !error && messages.length === 0 && (
-              <div className="text-center text-muted-fg">No messages found</div>
-            )}
-
-            <div className="divide-y divide-dashed divide-border">
-              {messages
-                .filter((message) => hasVisibleContent(message))
-                .map((message) => {
-                  const textContent = getMessageContent(message.parts);
-                  return (
-                    <div key={message.info.id} className="py-3 px-6">
-                      <div className="mb-2 flex items-center gap-2">
-                        {message.info.role === "assistant" && (
-                          <IconBadgeSparkle size="16px" />
-                        )}
-                        {message.info.role === "user" && (
-                          <span className="text-sm font-semibold">You</span>
-                        )}
-                        {message.info.createdAt && (
-                          <span className="text-xs text-muted-fg">
-                            {new Date(message.info.createdAt).toLocaleString()}
-                          </span>
-                        )}
-                      </div>
-                      {textContent && (
-                        <div className="prose prose-sm dark:prose-invert max-w-none">
-                          {textContent}
-                        </div>
-                      )}
-                      {message.parts
-                        .filter((part) => part.type === "tool-invocation")
-                        .map((part, idx) => (
-                          <div
-                            key={idx}
-                            className="mt-3 rounded border border-border bg-muted p-2 text-xs"
-                          >
-                            <div className="font-mono font-semibold text-primary">
-                              Tool: {part.toolName}
-                            </div>
-                            {part.args && (
-                              <pre className="mt-1 overflow-x-auto text-muted-fg">
-                                {JSON.stringify(part.args, null, 2)}
-                              </pre>
-                            )}
-                          </div>
-                        ))}
-                      {message.parts
-                        .filter((part) => part.type === "tool-result")
-                        .map((part, idx) => (
-                          <div
-                            key={idx}
-                            className="mt-2 rounded border border-success bg-success-subtle p-2 text-xs"
-                          >
-                            <div className="font-mono font-semibold text-success-subtle-fg">
-                              Result:
-                            </div>
-                            <pre className="mt-1 overflow-x-auto text-muted-fg">
-                              {typeof part.result === "string"
-                                ? part.result
-                                : JSON.stringify(part.result, null, 2)}
-                            </pre>
-                          </div>
-                        ))}
-                    </div>
-                  );
-                })}
-              <div ref={messagesEndRef} />
+          {error && (
+            <div className="rounded-md bg-danger-subtle p-4 text-danger-subtle-fg">
+              Error: {error}
             </div>
+          )}
 
-            {/* Loading indicator when sending message */}
-            {sending && (
-              <div className="py-3 px-6">
-                <div className="flex items-center gap-2">
-                  <Ripples size="30" speed="2" color="var(--color-primary)" />
-                  <span className="text-sm text-muted-fg">Thinking...</span>
-                </div>
-              </div>
-            )}
+          {!loading && !error && messages.length === 0 && (
+            <div className="text-center text-muted-fg">No messages found</div>
+          )}
+
+          <div className="divide-y divide-dashed divide-border">
+            {messages
+              .filter((message) => hasVisibleContent(message))
+              .map((message) => {
+                const textContent = getMessageContent(message.parts);
+                return (
+                  <div key={message.info.id} className="py-3 px-6">
+                    <div className="mb-2 flex items-center gap-2">
+                      {message.info.role === "assistant" && (
+                        <IconBadgeSparkle size="16px" />
+                      )}
+                      {message.info.role === "user" && (
+                        <span className="text-sm font-semibold">You</span>
+                      )}
+                      {message.info.createdAt && (
+                        <span className="text-xs text-muted-fg">
+                          {new Date(message.info.createdAt).toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                    {textContent && (
+                      <div className="prose prose-sm dark:prose-invert max-w-none">
+                        {textContent}
+                      </div>
+                    )}
+                    {message.parts
+                      .filter((part) => part.type === "tool-invocation")
+                      .map((part, idx) => (
+                        <div
+                          key={idx}
+                          className="mt-3 rounded border border-border bg-muted p-2 text-xs"
+                        >
+                          <div className="font-mono font-semibold text-primary">
+                            Tool: {part.toolName}
+                          </div>
+                          {part.args && (
+                            <pre className="mt-1 overflow-x-auto text-muted-fg">
+                              {JSON.stringify(part.args, null, 2)}
+                            </pre>
+                          )}
+                        </div>
+                      ))}
+                    {message.parts
+                      .filter((part) => part.type === "tool-result")
+                      .map((part, idx) => (
+                        <div
+                          key={idx}
+                          className="mt-2 rounded border border-success bg-success-subtle p-2 text-xs"
+                        >
+                          <div className="font-mono font-semibold text-success-subtle-fg">
+                            Result:
+                          </div>
+                          <pre className="mt-1 overflow-x-auto text-muted-fg">
+                            {typeof part.result === "string"
+                              ? part.result
+                              : JSON.stringify(part.result, null, 2)}
+                          </pre>
+                        </div>
+                      ))}
+                  </div>
+                );
+              })}
+            <div ref={messagesEndRef} />
           </div>
+
+          {/* Loading indicator when sending message */}
+          {sending && (
+            <div className="py-3 px-6">
+              <div className="flex items-center gap-2">
+                <Ripples size="30" speed="2" color="var(--color-primary)" />
+                <span className="text-sm text-muted-fg">Thinking...</span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Messaging UI - bottom part */}
-        <div className="border-t border-border p-4 shrink-0 relative ">
+        <div
+          ref={inputContainerRef}
+          className="border-t border-border p-4 shrink-0 relative"
+        >
           <FileMentionPopover
             isOpen={fileMention.isOpen}
             searchQuery={fileMention.searchQuery}

@@ -16,11 +16,11 @@ const geistMono = Geist_Mono({
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <SidebarProvider className={geistSans.className}>
+    <SidebarProvider className={`${geistSans.className} h-dvh overflow-hidden`}>
       <AppSidebar intent="inset" collapsible="dock" />
-      <SidebarInset>
+      <SidebarInset className="overflow-hidden">
         <AppSidebarNav />
-        <div>{children}</div>
+        <div className="flex-1 overflow-auto">{children}</div>
       </SidebarInset>
     </SidebarProvider>
   );
