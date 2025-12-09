@@ -166,7 +166,7 @@ export default function AppSidebar(
         <Link href="/" className="flex items-center gap-x-2">
           <img src="/logo.svg" alt="Logo" className="size-6" />
           <SidebarLabel className="font-medium">
-            OpenCode <span className="text-muted-fg">Sessions</span>
+            OpenCode <span className="text-muted-fg">Portal</span>
           </SidebarLabel>
         </Link>
       </SidebarHeader>
