@@ -1,0 +1,8 @@
+services:
+  portal:
+    image: ghcr.io/hosenur/portal:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - OPENCODE_SERVER_URL=http://localhost:4000
+    restart: unless-stopped
