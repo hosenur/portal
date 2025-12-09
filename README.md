@@ -1,5 +1,7 @@
 # OpenCode Portal
 
+![banner](/public/banner.png)
+
 A web-based UI for [OpenCode](https://opencode.ai), the AI coding agent. This portal provides a browser interface to interact with OpenCode sessions, view messages, and chat with the AI assistant.
 
 ## Overview

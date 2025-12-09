@@ -152,7 +152,6 @@ export default function SessionPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const inputContainerRef = useRef<HTMLDivElement>(null);
 
   const fileMention = useFileMention();
   const { selectedModel } = useSelectedModel();
@@ -181,40 +180,6 @@ export default function SessionPage() {
       }, 100);
     }
   }, [isInitialLoad, loading]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Handle mobile keyboard - scroll input into view when focused
-  useEffect(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    const handleFocus = () => {
-      // Small delay to wait for keyboard to appear
-      setTimeout(() => {
-        inputContainerRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "end",
-        });
-      }, 300);
-    };
-
-    // Also handle resize events (keyboard appearing changes viewport)
-    const handleResize = () => {
-      if (document.activeElement === textarea) {
-        inputContainerRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "end",
-        });
-      }
-    };
-
-    textarea.addEventListener("focus", handleFocus);
-    window.visualViewport?.addEventListener("resize", handleResize);
-
-    return () => {
-      textarea.removeEventListener("focus", handleFocus);
-      window.visualViewport?.removeEventListener("resize", handleResize);
-    };
-  }, []);
 
   // Initial data fetch
   useEffect(() => {
@@ -249,6 +214,20 @@ export default function SessionPage() {
 
     fetchData();
   }, [id]);
+
+  // Poll for new messages every 3 seconds (for cross-device sync)
+  useEffect(() => {
+    if (!id || loading) return;
+
+    const pollInterval = setInterval(() => {
+      // Don't poll while actively sending messages to avoid conflicts
+      if (!isProcessingQueue.current) {
+        fetchMessages();
+      }
+    }, 3000);
+
+    return () => clearInterval(pollInterval);
+  }, [id, loading]);
 
   const fetchMessages = async () => {
     if (!id) return;
@@ -417,10 +396,7 @@ export default function SessionPage() {
         </div>
 
         {/* Messaging UI - bottom part */}
-        <div
-          ref={inputContainerRef}
-          className="border-t border-border p-4 shrink-0 relative"
-        >
+        <div className="border-t border-border p-4 shrink-0 relative">
           <FileMentionPopover
             isOpen={fileMention.isOpen}
             searchQuery={fileMention.searchQuery}
