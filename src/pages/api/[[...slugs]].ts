@@ -33,10 +33,14 @@ const app = new Elysia({ prefix: "/api" })
     return messages;
   })
   .post("/sessions/:id/prompt", async ({ params, body }) => {
-    const { text } = body as { text: string };
+    const { text, model } = body as {
+      text: string;
+      model?: { providerID: string; modelID: string };
+    };
     const response = await opencodeClient.session.prompt({
       path: { id: params.id },
       body: {
+        ...(model && { model }),
         parts: [{ type: "text", text }],
       },
     });

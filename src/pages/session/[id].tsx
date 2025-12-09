@@ -11,6 +11,7 @@ import {
 import { Ripples } from "ldrs/react";
 import "ldrs/react/Ripples.css";
 import { Button } from "@/components/ui/button";
+import { useSelectedModel } from "@/hooks/use-selected-model";
 
 interface Part {
   type: string;
@@ -54,6 +55,7 @@ export default function SessionPage() {
   const inputContainerRef = useRef<HTMLDivElement>(null);
 
   const fileMention = useFileMention();
+  const { selectedModel } = useSelectedModel();
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -163,7 +165,10 @@ export default function SessionPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ text: messageText }),
+        body: JSON.stringify({
+          text: messageText,
+          model: selectedModel,
+        }),
       });
 
       if (!response.ok) {
