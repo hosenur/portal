@@ -74,7 +74,7 @@ export function ModelSelect() {
       placeholder={isLoading ? "Loading models..." : "Select a model"}
       className="min-w-48"
     >
-      <SelectTrigger />
+      <SelectTrigger className="w-min ml-auto" />
       <Popover className="entering:fade-in exiting:fade-out flex max-h-96 w-(--trigger-width) entering:animate-in exiting:animate-out flex-col overflow-hidden rounded-lg border bg-overlay">
         <Dialog aria-label="Model">
           <Autocomplete filter={contains}>

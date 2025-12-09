@@ -10,6 +10,7 @@ import {
 } from "@/components/file-mention-popover";
 import { Ripples } from "ldrs/react";
 import "ldrs/react/Ripples.css";
+import { Button } from "@/components/ui/button";
 
 interface Part {
   type: string;
@@ -48,6 +49,7 @@ export default function SessionPage() {
   const [fileResults, setFileResults] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const fileMention = useFileMention();
 
@@ -273,14 +275,16 @@ export default function SessionPage() {
         </div>
 
         {/* Messaging UI - bottom part */}
-        <div className="border-t border-border p-4 flex-shrink-0 relative">
+        <div className="border-t border-border p-4 shrink-0 relative ">
           <FileMentionPopover
             isOpen={fileMention.isOpen}
             searchQuery={fileMention.searchQuery}
-            position={fileMention.position}
             selectedIndex={fileMention.selectedIndex}
             onSelectedIndexChange={fileMention.setSelectedIndex}
             onFilesChange={setFileResults}
+            textareaRef={textareaRef}
+            mentionStart={fileMention.mentionStart}
+            onClose={fileMention.close}
             onSelect={(filePath) => {
               const newValue = fileMention.handleSelect(filePath, input);
               setInput(newValue);
@@ -288,12 +292,13 @@ export default function SessionPage() {
           />
           <form onSubmit={handleSubmit} className="w-full">
             <Textarea
+              ref={textareaRef}
               value={input}
               onChange={(e) => {
                 const value = e.target.value;
                 setInput(value);
                 const cursorPos = e.target.selectionStart;
-                fileMention.handleInputChange(value, cursorPos, e.target);
+                fileMention.handleInputChange(value, cursorPos);
               }}
               onKeyDown={(e) => {
                 // Handle file mention keyboard navigation
@@ -328,18 +333,14 @@ export default function SessionPage() {
               }}
               placeholder="Type your message... (use @ to mention files)"
               disabled={sending}
-              className="w-full resize-none"
-              rows={1}
+              className="w-full resize-none min-h-32 max-h-32 overflow-y-auto"
+              rows={5}
             />
             <div className="mt-3 flex items-center gap-2">
               <ModelSelect />
-              <button
-                type="submit"
-                disabled={sending || !input.trim()}
-                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary/90 disabled:opacity-50"
-              >
+              <Button type="submit" isDisabled={sending || !input.trim()}>
                 {sending ? "Sending..." : "Send"}
-              </button>
+              </Button>
             </div>
           </form>
         </div>

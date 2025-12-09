@@ -1,13 +1,18 @@
-"use client"
+"use client";
 
-import { TextArea, type TextAreaProps } from "react-aria-components"
-import { twJoin } from "tailwind-merge"
-import { cx } from "@/lib/primitive"
+import { TextArea, type TextAreaProps } from "react-aria-components";
+import { twJoin } from "tailwind-merge";
+import { cx } from "@/lib/primitive";
 
-export function Textarea({ className, ...props }: TextAreaProps) {
+interface TextareaComponentProps extends TextAreaProps {
+  ref?: React.Ref<HTMLTextAreaElement>;
+}
+
+export function Textarea({ className, ref, ...props }: TextareaComponentProps) {
   return (
     <span data-slot="control" className="relative block w-full">
       <TextArea
+        ref={ref}
         {...props}
         className={cx(
           twJoin([
@@ -24,5 +29,5 @@ export function Textarea({ className, ...props }: TextAreaProps) {
         )}
       />
     </span>
-  )
+  );
 }

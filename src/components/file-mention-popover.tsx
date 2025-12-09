@@ -8,28 +8,114 @@ interface FileResult {
   name: string;
 }
 
+interface CaretPosition {
+  top: number;
+  left: number;
+}
+
+// Get caret coordinates in a textarea by creating a mirror div
+function getCaretCoordinates(
+  element: HTMLTextAreaElement,
+  position: number,
+): CaretPosition {
+  const div = document.createElement("div");
+  const style = getComputedStyle(element);
+
+  // Copy styles that affect text layout
+  const properties = [
+    "fontFamily",
+    "fontSize",
+    "fontWeight",
+    "fontStyle",
+    "letterSpacing",
+    "textTransform",
+    "wordSpacing",
+    "textIndent",
+    "whiteSpace",
+    "wordWrap",
+    "overflowWrap",
+    "lineHeight",
+    "paddingTop",
+    "paddingRight",
+    "paddingBottom",
+    "paddingLeft",
+    "borderTopWidth",
+    "borderRightWidth",
+    "borderBottomWidth",
+    "borderLeftWidth",
+    "boxSizing",
+  ] as const;
+
+  div.style.position = "absolute";
+  div.style.visibility = "hidden";
+  div.style.whiteSpace = "pre-wrap";
+  div.style.wordWrap = "break-word";
+  div.style.width = `${element.offsetWidth}px`;
+
+  for (const prop of properties) {
+    div.style[prop] = style[prop];
+  }
+
+  document.body.appendChild(div);
+
+  const text = element.value.substring(0, position);
+  div.textContent = text;
+
+  // Add a span at the caret position to measure
+  const span = document.createElement("span");
+  span.textContent = element.value.substring(position) || ".";
+  div.appendChild(span);
+
+  const rect = element.getBoundingClientRect();
+  const spanRect = span.getBoundingClientRect();
+  const divRect = div.getBoundingClientRect();
+
+  document.body.removeChild(div);
+
+  return {
+    top: rect.top + (spanRect.top - divRect.top) - element.scrollTop,
+    left: rect.left + (spanRect.left - divRect.left) - element.scrollLeft,
+  };
+}
+
 interface FileMentionPopoverProps {
   isOpen: boolean;
   searchQuery: string;
   onSelect: (filePath: string) => void;
-  position: { top: number; left: number };
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+  mentionStart: number | null;
   selectedIndex: number;
   onSelectedIndexChange: (index: number) => void;
   onFilesChange?: (files: string[]) => void;
+  onClose: () => void;
 }
 
 export function FileMentionPopover({
   isOpen,
   searchQuery,
   onSelect,
-  position,
+  textareaRef,
+  mentionStart,
   selectedIndex,
   onSelectedIndexChange,
   onFilesChange,
+  onClose,
 }: FileMentionPopoverProps) {
   const [files, setFiles] = useState<FileResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [position, setPosition] = useState<CaretPosition | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  // Calculate position when mention starts
+  useEffect(() => {
+    if (isOpen && mentionStart !== null && textareaRef.current) {
+      const coords = getCaretCoordinates(textareaRef.current, mentionStart);
+      setPosition(coords);
+    } else {
+      setPosition(null);
+    }
+  }, [isOpen, mentionStart, textareaRef]);
 
   useEffect(() => {
     if (!isOpen || !searchQuery) {
@@ -83,12 +169,36 @@ export function FileMentionPopover({
     }
   }, [selectedIndex, files.length]);
 
-  if (!isOpen) return null;
+  // Close on click outside
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        popoverRef.current &&
+        !popoverRef.current.contains(e.target as Node) &&
+        textareaRef.current &&
+        !textareaRef.current.contains(e.target as Node)
+      ) {
+        onClose();
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen, onClose, textareaRef]);
+
+  if (!isOpen || !position) return null;
 
   return (
     <div
-      className="fixed z-50 min-w-64 max-w-md rounded-lg border border-border bg-overlay shadow-lg"
-      style={{ top: position.top, left: position.left }}
+      ref={popoverRef}
+      className="fixed z-50 min-w-64 max-w-md rounded-lg border border-border bg-overlay shadow-lg animate-in fade-in slide-in-from-bottom-1"
+      style={{
+        top: position.top - 8,
+        left: position.left,
+        transform: "translateY(-100%)",
+      }}
     >
       <div className="p-2 text-xs text-muted-fg border-b border-border">
         {loading ? "Searching..." : `Files matching "${searchQuery}"`}
@@ -132,14 +242,9 @@ export function FileMentionPopover({
 interface UseMentionResult {
   isOpen: boolean;
   searchQuery: string;
-  position: { top: number; left: number };
   selectedIndex: number;
   mentionStart: number | null;
-  handleInputChange: (
-    value: string,
-    cursorPosition: number,
-    textareaElement: HTMLTextAreaElement,
-  ) => void;
+  handleInputChange: (value: string, cursorPosition: number) => void;
   handleKeyDown: (e: React.KeyboardEvent, filesCount: number) => boolean;
   handleSelect: (filePath: string, currentValue: string) => string;
   close: () => void;
@@ -149,15 +254,10 @@ interface UseMentionResult {
 export function useFileMention(): UseMentionResult {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [position, setPosition] = useState({ top: 0, left: 0 });
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [mentionStart, setMentionStart] = useState<number | null>(null);
 
-  const handleInputChange = (
-    value: string,
-    cursorPosition: number,
-    textareaElement: HTMLTextAreaElement,
-  ) => {
+  const handleInputChange = (value: string, cursorPosition: number) => {
     // Find if we're in a mention context
     const textBeforeCursor = value.slice(0, cursorPosition);
     const atIndex = textBeforeCursor.lastIndexOf("@");
@@ -176,14 +276,6 @@ export function useFileMention(): UseMentionResult {
         setSearchQuery(textAfterAt);
         setMentionStart(atIndex);
         setSelectedIndex(0);
-
-        // Calculate position based on textarea
-        const rect = textareaElement.getBoundingClientRect();
-        setPosition({
-          top: rect.top - 8, // Position above the textarea
-          left: rect.left,
-        });
-
         setIsOpen(true);
         return;
       }
@@ -233,7 +325,7 @@ export function useFileMention(): UseMentionResult {
     const afterMention = currentValue.slice(
       mentionStart + 1 + searchQuery.length,
     );
-    const newValue = `${beforeMention}@${filePath}${afterMention}`;
+    const newValue = `${beforeMention}@${filePath} ${afterMention}`;
 
     close();
     return newValue;
@@ -249,7 +341,6 @@ export function useFileMention(): UseMentionResult {
   return {
     isOpen,
     searchQuery,
-    position,
     selectedIndex,
     mentionStart,
     handleInputChange,
