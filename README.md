@@ -1,40 +1,81 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/pages/api-reference/create-next-app).
+# OpenCode Portal
+
+A web-based UI for [OpenCode](https://opencode.ai), the AI coding agent. This portal provides a browser interface to interact with OpenCode sessions, view messages, and chat with the AI assistant.
+
+## Overview
+
+OpenCode Portal connects to a running OpenCode server and provides:
+
+- Session management (create, view, delete sessions)
+- Real-time chat interface with the AI assistant
+- File mention support (`@filename` to reference files)
+- Model selection
+- Dark/light theme support
+
+## Use Case
+
+This portal is designed for remote access to your OpenCode instance. Deploy the portal on a VPS alongside OpenCode, then use [Tailscale](https://tailscale.com) (or similar VPN) to securely connect from your mobile device or any other machine.
+
+**Example setup:**
+```
+[Your Phone] ---(Tailscale)---> [VPS running Portal + OpenCode]
+```
+
+## Prerequisites
+
+- A running OpenCode server (default port: 4000)
+- [Bun](https://bun.sh) runtime (recommended) or Node.js
+
+## Environment Variables
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `OPENCODE_SERVER_URL` | URL of the OpenCode server (e.g., `http://localhost:4000`) | Yes |
 
 ## Getting Started
 
-First, run the development server:
+### Development
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
+# Install dependencies
+bun install
+
+# Set environment variable
+export OPENCODE_SERVER_URL=http://localhost:4000
+
+# Run development server
 bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `pages/index.tsx`. The page auto-updates as you edit the file.
+### Docker
 
-[API routes](https://nextjs.org/docs/pages/building-your-application/routing/api-routes) can be accessed on [http://localhost:3000/api/hello](http://localhost:3000/api/hello). This endpoint can be edited in `pages/api/hello.ts`.
+```bash
+# Build the image
+docker build -t opencode-portal .
 
-The `pages/api` directory is mapped to `/api/*`. Files in this directory are treated as [API routes](https://nextjs.org/docs/pages/building-your-application/routing/api-routes) instead of React pages.
+# Run the container
+docker run -p 3000:3000 -e OPENCODE_SERVER_URL=http://localhost:4000 opencode-portal
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/pages/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## GitHub Container Registry
 
-## Learn More
+Pre-built images are available at:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+docker pull ghcr.io/hosenur/portal:latest
+docker run -p 3000:3000 -e OPENCODE_SERVER_URL=http://localhost:4000 ghcr.io/hosenur/portal:latest
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn-pages-router) - an interactive Next.js tutorial.
+## Tech Stack
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- [Next.js](https://nextjs.org) - React framework
+- [React Aria Components](https://react-spectrum.adobe.com/react-aria/) - Accessible UI components
+- [Tailwind CSS](https://tailwindcss.com) - Styling
+- [Elysia](https://elysiajs.com) - API routing
+- [OpenCode SDK](https://www.npmjs.com/package/@opencode-ai/sdk) - OpenCode API client
 
-## Deploy on Vercel
+## License
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/pages/building-your-application/deploying) for more details.
+MIT
