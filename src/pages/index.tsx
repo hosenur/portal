@@ -1,6 +1,10 @@
 import AppLayout from "@/layouts/app-layout";
-
+import EmptyState from "@/components/empty-state";
 
 export default function Home() {
-  return <AppLayout>hi</AppLayout>;
+  return (
+    <AppLayout>
+      <EmptyState />
+    </AppLayout>
+  );
 }

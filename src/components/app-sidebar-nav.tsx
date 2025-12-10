@@ -1,5 +1,3 @@
-"use client";
-
 import {
   ArrowRightOnRectangleIcon,
   Cog6ToothIcon,
@@ -19,49 +17,24 @@ import {
   MenuTrigger,
 } from "@/components/ui/menu";
 import { SidebarNav, SidebarTrigger } from "@/components/ui/sidebar";
+import { useCurrentProject } from "@/hooks/use-project";
+import { useSession } from "@/hooks/use-sessions";
 import { useRouter } from "next/router";
-import { useEffect, useState } from "react";
-
-interface Project {
-  id: string;
-  worktree: string;
-  name?: string;
-}
-
-interface Session {
-  id: string;
-  title?: string;
-}
 
 export default function AppSidebarNav() {
   const router = useRouter();
-  const [project, setProject] = useState<Project | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const { project } = useCurrentProject();
 
-  useEffect(() => {
-    // Fetch current project
-    fetch("/api/project/current")
-      .then((res) => res.json())
-      .then((data) => setProject(data.data || data))
-      .catch(console.error);
-
-    // Fetch session if we're on a session page
-    if (router.pathname.startsWith("/session/")) {
-      const sessionId = router.query.id as string;
-      if (sessionId) {
-        fetch(`/api/sessions/${sessionId}`)
-          .then((res) => res.json())
-          .then((data) => setSession(data.data || data))
-          .catch(console.error);
-      }
-    } else {
-      // Clear session when not on a session page
-      setSession(null);
-    }
-  }, [router.pathname, router.query.id]);
+  const sessionId = router.pathname.startsWith("/session/")
+    ? (router.query.id as string)
+    : undefined;
+  const { session } = useSession(sessionId);
 
   // Derive project name from worktree path
   const projectName = project?.worktree?.split("/").pop() || "Dashboard";
+
+  const sessionName =
+    session?.title || (session ? `Session ${session.id}` : null);
 
   return (
     <SidebarNav>
@@ -69,11 +42,7 @@ export default function AppSidebarNav() {
         <SidebarTrigger />
         <Breadcrumbs className="hidden md:flex">
           <BreadcrumbsItem href="/">{projectName}</BreadcrumbsItem>
-          {session && (
-            <BreadcrumbsItem>
-              {session.title || `Session ${session.id}`}
-            </BreadcrumbsItem>
-          )}
+          {session && <BreadcrumbsItem>{sessionName}</BreadcrumbsItem>}
         </Breadcrumbs>
       </span>
       <UserMenu />

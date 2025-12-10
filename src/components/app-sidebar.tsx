@@ -12,9 +12,10 @@ import {
 } from "@heroicons/react/24/solid";
 import { useRouter } from "next/router";
 import { useState } from "react";
-import useSWR, { mutate } from "swr";
+import useSWR from "swr";
 import IconBox from "@/components/icons/box-icon";
 import { IconGridPlus } from "@/components/icons/grid-plus-icon";
+import { mutateSessions, useSessions } from "@/hooks/use-sessions";
 import { Avatar } from "@/components/ui/avatar";
 import { Link } from "@/components/ui/link";
 import {
@@ -40,13 +41,6 @@ import {
   SidebarSectionGroup,
 } from "@/components/ui/sidebar";
 
-interface Session {
-  id: string;
-  title?: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
 interface Project {
   id: string;
   worktree: string;
@@ -58,15 +52,6 @@ interface Project {
     updated?: number;
   };
 }
-
-const fetcher = async (url: string) => {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error("Failed to fetch");
-  }
-  const data = await response.json();
-  return data.data || data || [];
-};
 
 const projectFetcher = async (url: string) => {
   const response = await fetch(url);
@@ -112,11 +97,7 @@ export default function AppSidebar(
   const router = useRouter();
   const [creating, setCreating] = useState(false);
 
-  const {
-    data: sessions,
-    error,
-    isLoading,
-  } = useSWR<Session[]>("/api/sessions", fetcher);
+  const { sessions, error, isLoading } = useSessions();
 
   async function handleNewSession() {
     setCreating(true);
@@ -129,7 +110,7 @@ export default function AppSidebar(
       const newSession = data.data || data;
 
       // Refresh the sessions list
-      mutate("/api/sessions");
+      mutateSessions();
 
       router.push(`/session/${newSession.id}`);
     } catch (err) {
@@ -149,7 +130,7 @@ export default function AppSidebar(
       }
 
       // Refresh the sessions list
-      mutate("/api/sessions");
+      mutateSessions();
 
       // If we're on the deleted session's page, navigate away
       if (router.query.id === sessionId) {

@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, useCallback, memo } from "react";
+import { useEffect, useRef, useState, useCallback, memo, useMemo } from "react";
 import { useRouter } from "next/router";
 import Markdown from "react-markdown";
+import NumberFlow from "@number-flow/react";
 import AppLayout from "@/layouts/app-layout";
 import { ModelSelect } from "@/components/model-select";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,6 +16,8 @@ import "ldrs/react/Ripples.css";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useSelectedModel } from "@/hooks/use-selected-model";
+import { mutateSessions } from "@/hooks/use-sessions";
+import { aggregateSessionUsage } from "@/hooks/use-session-usage";
 
 interface Part {
   type: string;
@@ -24,10 +27,21 @@ interface Part {
   result?: unknown;
 }
 
+interface MessageTokens {
+  input?: number;
+  output?: number;
+  reasoning?: number;
+  cache?: {
+    read?: number;
+    write?: number;
+  };
+}
+
 interface MessageInfo {
   id: string;
   role: "user" | "assistant";
   createdAt?: string;
+  tokens?: MessageTokens;
 }
 
 interface Message {
@@ -156,6 +170,9 @@ export default function SessionPage() {
   const fileMention = useFileMention();
   const { selectedModel } = useSelectedModel();
 
+  // Aggregate usage stats from messages
+  const usage = useMemo(() => aggregateSessionUsage(messages), [messages]);
+
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
@@ -272,6 +289,9 @@ export default function SessionPage() {
 
         await fetchMessages();
         setShouldScrollOnce(true);
+
+        // Refresh sessions list after response is received
+        mutateSessions();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to send message");
         // Remove the failed message from display
@@ -459,11 +479,22 @@ export default function SessionPage() {
               className="w-full resize-none min-h-32 max-h-32 overflow-y-auto"
               rows={5}
             />
-            <div className="mt-3 flex items-center gap-2">
-              <ModelSelect />
-              <Button type="submit" isDisabled={!input.trim()}>
-                {sending ? "Sending..." : "Send"}
-              </Button>
+            <div className="mt-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ModelSelect />
+                <Button type="submit" isDisabled={!input.trim()}>
+                  {sending ? "Sending..." : "Send"}
+                </Button>
+              </div>
+              {usage.totalTokens > 0 && (
+                <div className="text-xs text-muted-fg">
+                  <NumberFlow
+                    value={usage.totalTokens}
+                    format={{ notation: "compact" }}
+                  />{" "}
+                  tokens
+                </div>
+              )}
             </div>
           </form>
         </div>
