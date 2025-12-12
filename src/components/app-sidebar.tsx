@@ -277,7 +277,7 @@ export default function AppSidebar(
               <HomeIcon />
               Dashboard
             </MenuItem>
-            <MenuItem href="#settings">
+            <MenuItem href="/settings">
               <Cog6ToothIcon />
               Settings
             </MenuItem>
