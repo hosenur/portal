@@ -29,7 +29,7 @@ import {
 } from "react-aria-components";
 import { twJoin, twMerge } from "tailwind-merge";
 import { SheetContent } from "@/components/ui/sheet";
-import { useIsMobile } from "@/hooks/use-mobile";
+import useMediaQuery from "@/hooks/use-media-query";
 import { cx } from "@/lib/primitive";
 import { Button } from "./button";
 import { Link } from "./link";
@@ -98,7 +98,7 @@ const SidebarProvider = ({
     [setOpenProp, open],
   );
 
-  const isMobile = useIsMobile();
+  const { isMobile } = useMediaQuery();
 
   const toggleSidebar = useCallback(() => {
     return isMobile ? setOpenMobile((open) => !open) : setOpen((open) => !open);

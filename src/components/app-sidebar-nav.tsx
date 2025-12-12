@@ -6,12 +6,19 @@ import IconGitPullRequest from "@/components/icons/git-pull-request-icon";
 import { Breadcrumbs, BreadcrumbsItem } from "@/components/ui/breadcrumbs";
 import { Button } from "@/components/ui/button";
 import { SidebarNav, SidebarTrigger } from "@/components/ui/sidebar";
+import useLocalStorage from "@/hooks/use-local-storage";
 import { useCurrentProject } from "@/hooks/use-project";
 import { useSelectedModel } from "@/hooks/use-selected-model";
-import { mutateSessions, useSession } from "@/hooks/use-sessions";
 import { mutateSessionMessages } from "@/hooks/use-session-messages";
+import { mutateSessions, useSession } from "@/hooks/use-sessions";
+import { PR_PREFIX_KEY } from "@/pages/settings";
 
-const CREATE_PR_PROMPT = `Use gh CLI to create a pull request. Follow these steps:
+const getCreatePRPrompt = (branchPrefix: string) => {
+  const prefixInstruction = branchPrefix
+    ? `\n- When creating a new branch, use the prefix "${branchPrefix}" for the branch name (e.g., "${branchPrefix}descriptive-branch-name")`
+    : "";
+
+  return `Use gh CLI to create a pull request. Follow these steps:
 
 1. First, check git status to see all changes
 2. Stage all relevant changes with git add
@@ -26,7 +33,8 @@ Make sure to:
 - Write a meaningful commit message that explains WHY, not just WHAT
 - The PR title should be concise but descriptive
 - The PR body should summarize the changes and their purpose
-- Always checkout to main after successfully creating the PR`;
+- Always checkout to main after successfully creating the PR${prefixInstruction}`;
+};
 
 const PULL_CHANGES_PROMPT = `Pull the latest changes from the remote repository. Follow these steps:
 
@@ -61,6 +69,7 @@ export default function AppSidebarNav() {
   const router = useRouter();
   const { project } = useCurrentProject();
   const { selectedModel } = useSelectedModel();
+  const [prPrefix] = useLocalStorage<string>(PR_PREFIX_KEY, "");
   const [isCreatingPR, setIsCreatingPR] = useState(false);
   const [isPulling, setIsPulling] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
@@ -104,7 +113,7 @@ export default function AppSidebarNav() {
   const handleCreatePR = async () => {
     setIsCreatingPR(true);
     try {
-      await sendPrompt(CREATE_PR_PROMPT);
+      await sendPrompt(getCreatePRPrompt(prPrefix));
     } catch (err) {
       console.error("Failed to create PR:", err);
       alert("Failed to send PR creation request");

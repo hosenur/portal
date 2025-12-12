@@ -2,7 +2,7 @@
 
 import { DocumentIcon } from "@heroicons/react/24/outline";
 import { useEffect, useRef, useState } from "react";
-import { useIsMobile } from "@/hooks/use-mobile";
+import useMediaQuery from "@/hooks/use-media-query";
 
 interface FileResult {
   path: string;
@@ -134,7 +134,7 @@ export function FileMentionPopover({
   const [position, setPosition] = useState<CaretPosition | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
-  const isMobile = useIsMobile();
+  const { isMobile } = useMediaQuery();
 
   // Calculate position when mention starts
   useEffect(() => {
