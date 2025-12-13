@@ -12,8 +12,8 @@
   "dependencies": {
     "@heroicons/react": "^2.2.0",
     "@number-flow/react": "^0.5.10",
-    "@opencode-ai/sdk": "^1.0.150",
-    "elysia": "^1.4.18",
+    "@opencode-ai/sdk": "^1.0.152",
+    "elysia": "^1.4.19",
     "ldrs": "^1.1.9",
     "motion": "^12.23.26",
     "next": "16.0.8",
