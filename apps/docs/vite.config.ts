@@ -15,6 +15,24 @@ export default defineConfig({
     }),
   ],
   ssr: {
-    external: ["@takumi-rs/image-response", "@takumi-rs/core"],
+    external: [
+      "@takumi-rs/image-response",
+      "@takumi-rs/core",
+      "@takumi-rs/core-linux-x64-gnu",
+      "@takumi-rs/template",
+      "@takumi-rs/helpers",
+    ],
+    noExternal: [],
+  },
+  build: {
+    rollupOptions: {
+      external: [
+        "@takumi-rs/image-response",
+        "@takumi-rs/core",
+        "@takumi-rs/core-linux-x64-gnu",
+        "@takumi-rs/template",
+        "@takumi-rs/helpers",
+      ],
+    },
   },
 });

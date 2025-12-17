@@ -4,6 +4,9 @@
   "workspaces": {
     "": {
       "name": "portal",
+      "dependencies": {
+        "@takumi-rs/core-linux-x64-gnu": "^0.57.6",
+      },
       "devDependencies": {
         "prettier": "^3.7.4",
         "turbo": "^2.6.3",
@@ -16,6 +19,7 @@
         "@fontsource/geist-sans": "^5.2.5",
         "@react-router/node": "^7.10.1",
         "@react-router/serve": "^7.10.1",
+        "@takumi-rs/core": "^0.57.6",
         "@takumi-rs/core-linux-x64-gnu": "^0.57.6",
         "@takumi-rs/image-response": "^0.57.6",
         "@takumi-rs/template": "^0.57.6",
