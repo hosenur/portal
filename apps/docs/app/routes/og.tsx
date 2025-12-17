@@ -1,10 +1,7 @@
-import { ImageResponse } from "@takumi-rs/image-response/wasm";
+import { ImageResponse } from "@takumi-rs/image-response";
 import type { LoaderFunctionArgs } from "react-router";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { createRequire } from "node:module";
-
-const require = createRequire(import.meta.url);
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
@@ -15,10 +12,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // Load DepartureMono font
   const fontPath = join(process.cwd(), "public", "DepartureMono-Regular.otf");
   const fontData = await readFile(fontPath);
-
-  // Load WASM module
-  const wasmPath = require.resolve("@takumi-rs/wasm/takumi_wasm_bg.wasm");
-  const wasmBuffer = await readFile(wasmPath);
 
   return new ImageResponse(
     <div
@@ -46,7 +39,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
       width: 1200,
       height: 630,
       format: "png",
-      module: wasmBuffer,
       fonts: [
         {
           name: "DepartureMono",

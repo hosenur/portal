@@ -15,18 +15,6 @@ export default defineConfig({
     }),
   ],
   ssr: {
-    external: [
-      "@takumi-rs/image-response",
-      "@takumi-rs/core",
-      "@takumi-rs/wasm",
-    ],
-    noExternal: [],
-  },
-  optimizeDeps: {
-    exclude: [
-      "@takumi-rs/image-response",
-      "@takumi-rs/core",
-      "@takumi-rs/wasm",
-    ],
+    external: ["@takumi-rs/image-response", "@takumi-rs/core"],
   },
 });
