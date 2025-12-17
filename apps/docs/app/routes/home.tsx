@@ -7,7 +7,7 @@ import { AnimatedHero } from "@/components/animated-hero";
 
 export function meta(_args: Route.MetaArgs) {
   const ogImageUrl =
-    "https://api.hosenur.workers.dev/openportal/og?title=Portal&description=Mobile-first%20Web%20UI%20for%20OpenCode";
+    "https://api.hosenur.workers.dev/openportal/og?title=Portal&description=Portal%20is%20a%20comprehensive%20mobile-first%20web%20UI%20for%20OpenCode%2C%20solving%20the%20web%20UI%20limitations%20with%20a%20complete%20solution%20that%20eliminates%20configuration%20complexity.";
 
   return [
     { title: "Portal - Mobile-first Web UI for OpenCode" },
