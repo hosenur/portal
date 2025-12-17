@@ -1,0 +1,44 @@
+---
+title: Local Setup
+description: Setting up fumadocs locally for development
+icon: LocalIcon
+---
+
+# Setup - Local
+
+This guide covers setting up fumadocs for local development.
+
+## Prerequisites
+
+- Node.js 18 or higher
+- npm, yarn, or pnpm
+
+## Installation
+
+Install fumadocs using your preferred package manager:
+
+```bash
+npm install fumadocs
+```
+
+## Basic Configuration
+
+Create a basic configuration file:
+
+```tsx
+import { createMDX } from "fumadocs-mdx";
+
+export const { docs } = createMDX({
+  source: "./content/docs",
+});
+```
+
+## Development Server
+
+Start your development server:
+
+```bash
+npm run dev
+```
+
+Your documentation site will be available at `http://localhost:3000`.

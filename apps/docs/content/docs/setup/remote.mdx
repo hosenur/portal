@@ -1,0 +1,58 @@
+---
+title: Remote Setup
+description: Setting up fumadocs for remote deployment
+icon: RemoteIcon
+---
+
+# Setup - Remote
+
+This guide covers deploying fumadocs to remote hosting platforms.
+
+## Build Configuration
+
+Configure your build for production:
+
+```json
+{
+  "scripts": {
+    "build": "fumadocs build",
+    "start": "fumadocs start"
+  }
+}
+```
+
+## Deployment Options
+
+### Vercel
+
+Deploy to Vercel with zero configuration:
+
+```bash
+vercel
+```
+
+### Netlify
+
+Deploy to Netlify:
+
+```bash
+netlify deploy --prod
+```
+
+### Custom Server
+
+For custom server deployment:
+
+```bash
+npm run build
+npm run start
+```
+
+## Environment Variables
+
+Set up environment variables for your deployment:
+
+```bash
+SITE_URL=https://your-docs-site.com
+ANALYTICS_ID=your-analytics-id
+```

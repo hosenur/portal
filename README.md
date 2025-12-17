@@ -1,173 +1,135 @@
-# OpenCode Portal
+# Turborepo starter
 
-![banner](/public/banner.png)
+This Turborepo starter is maintained by the Turborepo core team.
 
-> **Disclaimer**: This is a **personal project** and is **not related** to [https://github.com/sst/opencode](https://github.com/sst/opencode) or the SST team. This portal is a personal-built interface for interacting with OpenCode instances.
+## Using this example
 
-A web-based UI for [OpenCode](https://opencode.ai), the AI coding agent. This portal provides a browser interface to interact with OpenCode sessions, view messages, and chat with the AI assistant.
+Run the following command:
 
-## Quick Start
-
-### Prerequisites
-
-- A running OpenCode server (default port: 4000)
-- [Bun](https://bun.sh) runtime (recommended) or Node.js
-
-### Environment Variables
-
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `OPENCODE_SERVER_URL` | URL of the OpenCode server (e.g., `http://localhost:4000`) | Yes |
-
-### Development
-
-```bash
-# Install dependencies
-bun install
-
-# Set environment variable
-export OPENCODE_SERVER_URL=http://localhost:4000
-
-# Run development server
-bun dev
+```sh
+npx create-turbo@latest
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+## What's inside?
 
-### Docker
+This Turborepo includes the following packages/apps:
 
-```bash
-# Build the image
-docker build -t opencode-portal .
+### Apps and Packages
 
-# Run the container
-docker run -p 3000:3000 -e OPENCODE_SERVER_URL=http://localhost:4000 opencode-portal
+- `docs`: a [Next.js](https://nextjs.org/) app
+- `web`: another [Next.js](https://nextjs.org/) app
+- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
+- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
+- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+
+Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+
+### Utilities
+
+This Turborepo has some additional tools already setup for you:
+
+- [TypeScript](https://www.typescriptlang.org/) for static type checking
+- [ESLint](https://eslint.org/) for code linting
+- [Prettier](https://prettier.io) for code formatting
+
+### Build
+
+To build all apps and packages, run the following command:
+
+```
+cd my-turborepo
+
+# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
+turbo build
+
+# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
+npx turbo build
+yarn dlx turbo build
+pnpm exec turbo build
 ```
 
-### GitHub Container Registry
+You can build a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
 
-Pre-built images are available at:
+```
+# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
+turbo build --filter=docs
 
-```bash
-docker pull ghcr.io/hosenur/portal:latest
-docker run -p 3000:3000 -e OPENCODE_SERVER_URL=http://localhost:4000 ghcr.io/hosenur/portal:latest
+# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
+npx turbo build --filter=docs
+yarn exec turbo build --filter=docs
+pnpm exec turbo build --filter=docs
 ```
 
-## Overview
+### Develop
 
-OpenCode Portal connects to a running OpenCode server and provides:
+To develop all apps and packages, run the following command:
 
-- Session management (create, view, delete sessions)
-- Real-time chat interface with the AI assistant
-- File mention support (`@filename` to reference files)
-- Model selection
-- Dark/light theme support
+```
+cd my-turborepo
 
-## Why This Project?
+# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
+turbo dev
 
-OpenCode comes with its own official web UI that you can access by running:
-```bash
-opencode --port 4096
+# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
+npx turbo dev
+yarn exec turbo dev
+pnpm exec turbo dev
 ```
 
-However, the official UI is **currently under development** and has some limitations:
-- Not mobile responsive
-- Limited mobile experience
+You can develop a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
 
-This project was inspired by my personal need to access OpenCode from my mobile device when I don't have my laptop around. The goal is to provide a mobile-first, responsive interface for interacting with OpenCode instances remotely.
-
-## Use Case
-
-This portal is designed for remote access to your OpenCode instance. Deploy the portal on a VPS alongside OpenCode, then use [Tailscale](https://tailscale.com) (or similar VPN) to securely connect from your mobile device or any other machine.
-
-**Example setup:**
 ```
-[Your Phone] ---(Tailscale)---> [VPS running Portal + OpenCode]
+# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
+turbo dev --filter=web
+
+# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
+npx turbo dev --filter=web
+yarn exec turbo dev --filter=web
+pnpm exec turbo dev --filter=web
 ```
 
-## Why This Project?
+### Remote Caching
 
-OpenCode comes with its own official web UI that you can access by running:
-```bash
-opencode --port 4096
+> [!TIP]
+> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
+
+Turborepo can use a technique known as [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
+
+By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
+
+```
+cd my-turborepo
+
+# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
+turbo login
+
+# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
+npx turbo login
+yarn exec turbo login
+pnpm exec turbo login
 ```
 
-However, the official UI is **currently under development** and has some limitations:
-- Not mobile responsive
-- Limited mobile experience
+This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
 
-This project was inspired by my personal need to access OpenCode from my mobile device when I don't have my laptop around. The goal is to provide a mobile-first, responsive interface for interacting with OpenCode instances remotely.
+Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
 
-## Use Case
-
-This portal is designed for remote access to your OpenCode instance. Deploy the portal on a VPS alongside OpenCode, then use [Tailscale](https://tailscale.com) (or similar VPN) to securely connect from your mobile device or any other machine.
-
-**Example setup:**
 ```
-[Your Phone] ---(Tailscale)---> [VPS running Portal + OpenCode]
+# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
+turbo link
+
+# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
+npx turbo link
+yarn exec turbo link
+pnpm exec turbo link
 ```
 
-## Tech Stack
+## Useful Links
 
-- [Next.js](https://nextjs.org) - React framework
-- [IntentUI](https://intentui.com/) - UI library
-- [Tailwind CSS](https://tailwindcss.com) - Styling
-- [Elysia](https://elysiajs.com) - API routing
-- [OpenCode SDK](https://www.npmjs.com/package/@opencode-ai/sdk) - OpenCode API client
+Learn more about the power of Turborepo:
 
-## Contributing
-
-Contributions are welcome! Here's how you can help:
-
-### Reporting Issues
-
-- **Bugs**: Report bugs by opening an issue with a clear description and steps to reproduce
-- **Feature requests**: Open an issue with the `feature` label and describe the proposed enhancement
-
-### Development Setup
-
-1. Fork the repository
-2. Clone your fork:
-   ```bash
-   git clone https://github.com/YOUR_USERNAME/portal.git
-   cd portal
-   ```
-3. Install dependencies:
-   ```bash
-   bun install
-   ```
-4. Set up environment variables:
-   ```bash
-   cp .env.example .env.local
-   # Edit .env.local with your configuration
-   ```
-5. Run the development server:
-   ```bash
-   bun dev
-   ```
-
-### Pull Request Process
-
-1. Create a feature branch from `main`
-2. Make your changes following the existing code style
-3. Test your changes thoroughly
-4. Update documentation if needed
-5. Submit a pull request with a clear description
-
-### Code Style
-
-- Use TypeScript for all new code
-- Follow the existing component patterns in `src/components/`
-- Use Tailwind CSS for styling
-- Maintain consistent naming conventions
-- Add proper TypeScript types
-
-### Getting Help
-
-- Check existing [issues](https://github.com/rahaman/portal/issues) before creating new ones
-- Join the discussion in existing issues
-- Be respectful and constructive in all interactions
-
-## License
-
-MIT
+- [Tasks](https://turborepo.com/docs/crafting-your-repository/running-tasks)
+- [Caching](https://turborepo.com/docs/crafting-your-repository/caching)
+- [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching)
+- [Filtering](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters)
+- [Configuration Options](https://turborepo.com/docs/reference/configuration)
+- [CLI Usage](https://turborepo.com/docs/reference/command-line-reference)

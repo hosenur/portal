@@ -1,0 +1,63 @@
+---
+title: Git
+description: Git integration and workflow guide
+icon: GitIcon
+---
+
+# Core Features - Git
+
+This guide covers Git integration and workflow features in fumadocs.
+
+## Git Integration
+
+fumadocs provides seamless Git integration to enhance your documentation workflow.
+
+### Version Control
+
+- **Automatic commits**: Document changes can be automatically committed
+- **Branch management**: Support for multiple documentation branches
+- **Merge conflict resolution**: Built-in tools for resolving documentation conflicts
+
+### Workflow Features
+
+#### Pre-commit Hooks
+
+Set up pre-commit hooks to validate documentation:
+
+```bash
+fumadocs git setup-hooks
+```
+
+#### Change Tracking
+
+Track documentation changes:
+
+```bash
+fumadocs git status
+```
+
+View documentation history:
+
+```bash
+fumadocs git log
+```
+
+## Collaboration
+
+### Pull Request Integration
+
+- Automatic documentation builds on PRs
+- Preview links for documentation changes
+- Comment system for documentation reviews
+
+### Team Workflows
+
+- **Feature branches**: Isolate documentation changes
+- **Review process**: Code review for documentation updates
+- **Release documentation**: Automatic deployment with releases
+
+## Best Practices
+
+- Commit documentation changes separately from code
+- Use descriptive commit messages for documentation
+- Review documentation changes in pull requests

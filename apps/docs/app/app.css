@@ -1,0 +1,28 @@
+@import "tailwindcss";
+@import '@fontsource/geist-sans';
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
+
+/* Font Face Declarations */
+@font-face {
+  font-family: "Departure Mono";
+  src: url("/DepartureMono-Regular.otf") format("opentype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Font Variables */
+:root {
+  --font-departure-mono: "Departure Mono", monospace;
+  --font-geist-sans: "Geist Sans", sans-serif;
+}
+
+/* Utility Classes */
+.font-departure {
+  font-family: var(--font-departure-mono);
+}
+
+body {
+  font-family: var(--font-geist-sans);
+}

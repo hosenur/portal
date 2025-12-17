@@ -1,0 +1,6 @@
+{
+  "title": "Core Features",
+  "defaultOpen": true,
+  "collapsible": false,
+  "pages": ["terminal", "git"]
+}

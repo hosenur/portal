@@ -5,7 +5,10 @@ on:
     branches:
       - main
     tags:
-      - 'v*'
+      - "v*"
+    paths:
+      - "apps/web/**"
+      - ".github/workflows/build.yml"
 
 jobs:
   build:
@@ -34,7 +37,8 @@ jobs:
       - name: Build and push to GHCR
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ./apps/web
+          file: ./apps/web/Dockerfile
           push: true
           platforms: linux/amd64,linux/arm64
           tags: ghcr.io/hosenur/portal:latest

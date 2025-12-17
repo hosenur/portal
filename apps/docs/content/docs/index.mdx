@@ -1,0 +1,27 @@
+---
+title: Welcome
+---
+
+Portal is a comprehensive mobile-first web UI for OpenCode. Use it on your home network or deploy to the cloud and access via VPN or TailScale.
+
+## Why Portal?
+
+OpenCode itself is the best coding harness I've used - it's incredibly flexible and powerful. However, the web UI still lacks in places and isn't fully responsive. I built Portal to solve these issues, providing a complete mobile-first solution with everything included, eliminating configuration complexity so you can focus on development.
+
+![image](/hero.png)
+
+## How Portal Works
+
+Portal runs two Docker containers to provide an isolated development environment:
+
+1. **Portal Web UI**: The main web interface that you interact with
+2. **OpenCode Container**: An isolated environment where your project runs
+
+The project directory is mounted to the OpenCode container, ensuring complete isolation from your host system. The Portal web UI connects to this OpenCode container and provides you with a comprehensive UI to run commands on your project, manage files, and interact with your development environment seamlessly.
+
+## Setup Options
+
+<Cards>
+  <Card title="Local Environment" href="https://reactrouter.com" />
+  <Card title="Remote With Tailscale" href="https://fumadocs.dev" />
+</Cards>

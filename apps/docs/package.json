@@ -1,0 +1,41 @@
+{
+  "name": "docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "react-router build",
+    "dev": "react-router dev",
+    "start": "react-router-serve ./build/server/index.js",
+    "types:check": "react-router typegen && fumadocs-mdx && tsc --noEmit",
+    "postinstall": "fumadocs-mdx",
+    "lint": "biome check",
+    "format": "biome format --write"
+  },
+  "dependencies": {
+    "@fontsource/geist-sans": "^5.2.5",
+    "@react-router/node": "^7.10.1",
+    "@react-router/serve": "^7.10.1",
+    "fumadocs-core": "16.2.5",
+    "fumadocs-mdx": "14.1.1",
+    "fumadocs-ui": "16.2.5",
+    "isbot": "^5.1.32",
+    "lucide-react": "^0.561.0",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
+    "react-router": "^7.10.1"
+  },
+  "devDependencies": {
+    "@react-router/dev": "^7.10.1",
+    "@tailwindcss/vite": "^4.1.17",
+    "@types/mdx": "^2.0.13",
+    "@types/node": "^24.10.2",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "react-router-devtools": "^6.0.0",
+    "tailwindcss": "^4.1.17",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.7",
+    "vite-tsconfig-paths": "^6.0.0",
+    "@biomejs/biome": "^2.3.8"
+  }
+}
