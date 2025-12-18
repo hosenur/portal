@@ -106,7 +106,7 @@ export default function Home() {
 
   return (
     <HomeLayout {...baseOptions()}>
-      <div className="p-8 pt-40 flex flex-col items-start text-left flex-1 w-full max-w-[1400px] mx-auto">
+      <div className="p-8 pt-40 flex flex-col items-start text-left flex-1 w-full max-w-350 mx-auto">
         <AnimatedHero />
         <p className="text-fd-muted-foreground mb-6 max-w-2xl text-lg">
           Portal is a comprehensive mobile-first web UI for OpenCode, with
@@ -130,9 +130,9 @@ export default function Home() {
         </div>
         <div className="mt-12 mb-8">
           <img
-            src="/screenshot.png"
+            src="/hero.png"
             alt="Portal Screenshot"
-            className="max-w-full h-auto shadow-lg border"
+            className="max-w-full h-auto shadow-lg border rounded-xl"
           />
         </div>
       </div>
