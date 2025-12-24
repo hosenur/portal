@@ -27,7 +27,7 @@ docker run -it --rm -p 4000:4000 \
   -v /var/run/docker.sock:/var/run/docker.sock \
   --name opencode \
   ghcr.io/sst/opencode:latest \
-  /bin/sh -c "opencode serve --port 4000 --hostname 0.0.0.0 & exec bash"
+  serve --port 4000 --hostname 0.0.0.0
 ```
 
 > **Note**: Omit the git configuration mounts if you do not need git setup:
