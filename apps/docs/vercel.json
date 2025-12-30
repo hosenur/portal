@@ -1,0 +1,4 @@
+{
+  "framework": "vite",
+  "buildCommand": "bun run build"
+}
