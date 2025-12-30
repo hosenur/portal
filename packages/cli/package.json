@@ -1,0 +1,50 @@
+{
+  "name": "openportal",
+  "version": "0.1.1",
+  "description": "CLI to run OpenCode Portal - a web UI for OpenCode AI coding agent",
+  "type": "module",
+  "bin": {
+    "openportal": "bin/openportal.js"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "web"
+  ],
+  "scripts": {
+    "build": "bun run scripts/build.ts",
+    "dev": "bun run src/cli.ts",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "bun run build",
+    "publish:npm": "npm publish --access public"
+  },
+  "dependencies": {
+    "commander": "^13.1.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.4",
+    "@types/node": "^22.10.2",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "opencode",
+    "ai",
+    "coding",
+    "assistant",
+    "portal",
+    "web-ui",
+    "cli"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hosenur/portal.git"
+  },
+  "homepage": "https://github.com/hosenur/portal#readme",
+  "bugs": {
+    "url": "https://github.com/hosenur/portal/issues"
+  }
+}
