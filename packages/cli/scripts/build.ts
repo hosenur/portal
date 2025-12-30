@@ -16,7 +16,6 @@ const DEV_ONLY_PACKAGES = [
   "prettier",
   "biome",
   "@biomejs",
-  "@swc",
   "turbo",
 ];
 
@@ -110,6 +109,21 @@ async function build(): Promise<void> {
   removeDevPackages(nodeModulesDir);
   removeSourceMaps(nodeModulesDir);
   console.log("");
+
+  console.log(
+    "5. Renaming node_modules to _modules (npm ignores node_modules)...",
+  );
+  const renamedModulesDir = resolve(WEB_OUTPUT_DIR, "_modules");
+  if (existsSync(nodeModulesDir)) {
+    if (existsSync(renamedModulesDir)) {
+      rmSync(renamedModulesDir, { recursive: true });
+    }
+    cpSync(nodeModulesDir, renamedModulesDir, { recursive: true });
+    rmSync(nodeModulesDir, { recursive: true });
+    console.log("   ✓ Renamed node_modules to _modules\n");
+  } else {
+    console.log("   ⚠ node_modules not found, skipping rename\n");
+  }
 
   const { stdout } = await $`du -sh ${WEB_OUTPUT_DIR}`.quiet();
   const size = stdout.toString().trim().split("\t")[0];

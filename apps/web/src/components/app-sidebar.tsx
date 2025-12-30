@@ -85,6 +85,14 @@ function CurrentProject() {
   );
 }
 
+function useHostname() {
+  const { data } = useSWR<{ hostname: string }>(
+    "/api/system/hostname",
+    projectFetcher,
+  );
+  return data?.hostname ?? "Loading...";
+}
+
 function truncateTitle(title: string, maxLength = 40): string {
   if (title.length <= maxLength) return title;
   const halfLength = Math.floor((maxLength - 3) / 2);
@@ -96,6 +104,7 @@ export default function AppSidebar(
 ) {
   const router = useRouter();
   const [creating, setCreating] = useState(false);
+  const hostname = useHostname();
 
   const { sessions, error, isLoading } = useSessions();
 
@@ -251,13 +260,10 @@ export default function AppSidebar(
               <Avatar
                 className="size-8 *:size-8 group-data-[state=collapsed]:size-6 group-data-[state=collapsed]:*:size-6"
                 isSquare
-                src="https://intentui.com/images/avatar/cobain.jpg"
+                initials={hostname.slice(0, 2).toUpperCase()}
               />
               <div className="in-data-[collapsible=dock]:hidden text-sm">
-                <SidebarLabel>Kurt Cobain</SidebarLabel>
-                <span className="-mt-0.5 block text-muted-fg">
-                  kurt@domain.com
-                </span>
+                <SidebarLabel>{hostname}</SidebarLabel>
               </div>
             </div>
             <ChevronUpDownIcon data-slot="chevron" />
@@ -268,8 +274,7 @@ export default function AppSidebar(
           >
             <MenuSection>
               <MenuHeader separator>
-                <span className="block">Kurt Cobain</span>
-                <span className="font-normal text-muted-fg">@cobain</span>
+                <span className="block">{hostname}</span>
               </MenuHeader>
             </MenuSection>
 

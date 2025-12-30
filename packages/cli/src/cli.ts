@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
-import { resolve } from "node:path";
+import { resolve, dirname } from "node:path";
 import { cwd } from "node:process";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import {
   log,
   logSuccess,
@@ -23,7 +25,12 @@ import {
 import { startWebServer, stopWebServer } from "./server.js";
 import type { ChildProcess } from "node:child_process";
 
-const version = "0.1.0";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const packageJson = JSON.parse(
+  readFileSync(resolve(__dirname, "..", "package.json"), "utf-8"),
+);
+const version = packageJson.version;
 
 interface CLIOptions {
   port: string;

@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { Elysia } from "elysia";
 import { createOpencodeClient } from "@opencode-ai/sdk";
+import os from "os";
 
 if (!process.env.OPENCODE_SERVER_URL) {
   throw new Error("OPENCODE_SERVER_URL environment variable is required");
@@ -69,6 +70,9 @@ const app = new Elysia({ prefix: "/api" })
       path: { id: params.id },
     });
     return { success: true };
+  })
+  .get("/system/hostname", () => {
+    return { hostname: os.hostname() };
   });
 
 export const config = {

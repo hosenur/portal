@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { resolve, dirname } from "node:path";
-import { existsSync } from "node:fs";
+import { resolve, dirname, delimiter } from "node:path";
+import { existsSync, symlinkSync, unlinkSync, lstatSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   log,
@@ -21,36 +21,90 @@ export interface ServerConfig {
   opencodeHost: string;
 }
 
-function findWebDirectory(): string | null {
+interface WebDirectoryResult {
+  webDir: string;
+  modulesDir: string | null;
+}
+
+function findWebDirectory(): WebDirectoryResult | null {
   const possiblePaths = [
-    resolve(__dirname, "..", "web"),
-    resolve(__dirname, "..", "..", "web"),
-    resolve(__dirname, "..", "..", "..", "apps", "web", ".next", "standalone"),
+    {
+      webDir: resolve(__dirname, "..", "web", "apps", "web"),
+      modulesDir: resolve(__dirname, "..", "web", "_modules"),
+    },
+    {
+      webDir: resolve(__dirname, "..", "web"),
+      modulesDir: resolve(__dirname, "..", "web", "_modules"),
+    },
+    {
+      webDir: resolve(__dirname, "..", "..", "web"),
+      modulesDir: resolve(__dirname, "..", "..", "web", "_modules"),
+    },
+    {
+      webDir: resolve(
+        __dirname,
+        "..",
+        "..",
+        "..",
+        "apps",
+        "web",
+        ".next",
+        "standalone",
+      ),
+      modulesDir: null,
+    },
   ];
 
-  for (const webPath of possiblePaths) {
-    const serverPath = resolve(webPath, "server.js");
+  for (const { webDir, modulesDir } of possiblePaths) {
+    const serverPath = resolve(webDir, "server.js");
     if (existsSync(serverPath)) {
-      return webPath;
+      const resolvedModulesDir =
+        modulesDir && existsSync(modulesDir) ? modulesDir : null;
+      return { webDir, modulesDir: resolvedModulesDir };
     }
   }
   return null;
 }
 
+function ensureNodeModulesSymlink(modulesDir: string): void {
+  const parentDir = resolve(modulesDir, "..");
+  const nodeModulesPath = resolve(parentDir, "node_modules");
+
+  try {
+    if (existsSync(nodeModulesPath)) {
+      const stats = lstatSync(nodeModulesPath);
+      if (stats.isSymbolicLink() || stats.isDirectory()) {
+        return;
+      }
+    }
+    symlinkSync("_modules", nodeModulesPath, "dir");
+  } catch {}
+}
+
 export async function startWebServer(
   config: ServerConfig,
 ): Promise<ChildProcess | null> {
-  const webDir = findWebDirectory();
+  const result = findWebDirectory();
 
-  if (!webDir) {
+  if (!result) {
     logError("Web application not found. The package may be corrupted.");
     logWarning("Expected to find server.js in the web directory.");
     return null;
   }
 
+  const { webDir, modulesDir } = result;
+
+  if (modulesDir) {
+    ensureNodeModulesSymlink(modulesDir);
+  }
+
   log(`Starting web server on port ${config.port}...`);
 
   const serverPath = resolve(webDir, "server.js");
+  const nodePathEnv = modulesDir
+    ? [modulesDir, process.env.NODE_PATH].filter(Boolean).join(delimiter)
+    : process.env.NODE_PATH;
+
   const proc = spawn("node", [serverPath], {
     cwd: webDir,
     stdio: ["ignore", "pipe", "pipe"],
@@ -59,6 +113,7 @@ export async function startWebServer(
       PORT: config.port.toString(),
       HOSTNAME: "0.0.0.0",
       NODE_ENV: "production",
+      NODE_PATH: nodePathEnv,
       OPENCODE_SERVER_URL: `http://${config.opencodeHost}:${config.opencodePort}`,
     },
   });
