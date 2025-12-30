@@ -77,7 +77,7 @@ function ensureNodeModulesSymlink(modulesDir: string): void {
         return;
       }
     }
-    symlinkSync("_modules", nodeModulesPath, "dir");
+    symlinkSync("_modules", nodeModulesPath, platform() === "win32" ? "junction" : "dir");
   } catch {}
 }
 
