@@ -1,63 +1,61 @@
 ---
-title: Git
-description: Git integration and workflow guide
-icon: GitIcon
+title: Git Integration
+description: How Portal integrates with Git for version control
 ---
 
-# Core Features - Git
+# Git Integration
 
-This guide covers Git integration and workflow features in fumadocs.
+Portal leverages OpenCode's powerful Git integration to provide seamless version control for your projects.
 
-## Git Integration
+## Features
 
-fumadocs provides seamless Git integration to enhance your documentation workflow.
+Portal supports all Git operations through OpenCode:
 
-### Version Control
+- **Commit changes**: Stage and commit files with meaningful messages
+- **Branch management**: Create, switch, and merge branches
+- **Push/Pull**: Sync with remote repositories
+- **Diff viewing**: Review changes before committing
+- **Conflict resolution**: Handle merge conflicts
 
-- **Automatic commits**: Document changes can be automatically committed
-- **Branch management**: Support for multiple documentation branches
-- **Merge conflict resolution**: Built-in tools for resolving documentation conflicts
+## How It Works
 
-### Workflow Features
+OpenCode automatically detects Git repositories and provides Git-aware features:
 
-#### Pre-commit Hooks
+1. **Repository Detection**: OpenCode identifies if your project is a Git repository
+2. **Status Tracking**: Track modified, staged, and untracked files
+3. **Commit History**: View and navigate commit history
 
-Set up pre-commit hooks to validate documentation:
+## Using Git in Portal
 
-```bash
-fumadocs git setup-hooks
+Git operations are performed through the chat interface. Simply ask OpenCode to:
+
+```
+"Commit my changes with message 'Add new feature'"
+"Create a new branch called feature/auth"
+"Push to origin"
+"Show me the diff of my changes"
 ```
 
-#### Change Tracking
+## Git Configuration
 
-Track documentation changes:
-
-```bash
-fumadocs git status
-```
-
-View documentation history:
+For Git operations to work properly, ensure your Git configuration is set up:
 
 ```bash
-fumadocs git log
+git config --global user.name "Your Name"
+git config --global user.email "your@email.com"
 ```
 
-## Collaboration
+## SSH Keys
 
-### Pull Request Integration
+For pushing to remote repositories, make sure your SSH keys are configured:
 
-- Automatic documentation builds on PRs
-- Preview links for documentation changes
-- Comment system for documentation reviews
+```bash
+# Generate SSH key if needed
+ssh-keygen -t ed25519 -C "your@email.com"
 
-### Team Workflows
+# Add to ssh-agent
+eval "$(ssh-agent -s)"
+ssh-add ~/.ssh/id_ed25519
+```
 
-- **Feature branches**: Isolate documentation changes
-- **Review process**: Code review for documentation updates
-- **Release documentation**: Automatic deployment with releases
-
-## Best Practices
-
-- Commit documentation changes separately from code
-- Use descriptive commit messages for documentation
-- Review documentation changes in pull requests
+Add the public key to your GitHub/GitLab account.

@@ -1,44 +1,102 @@
 ---
 title: Local Setup
-description: Setting up fumadocs locally for development
-icon: LocalIcon
+description: Setting up OpenCode Portal on your local machine
 ---
 
-# Setup - Local
+# Local Setup
 
-This guide covers setting up fumadocs for local development.
+Get Portal running on your local machine in under a minute.
 
 ## Prerequisites
 
-- Node.js 18 or higher
-- npm, yarn, or pnpm
-
-## Installation
-
-Install fumadocs using your preferred package manager:
+You need OpenCode installed on your system. Install it using one of these methods:
 
 ```bash
-npm install fumadocs
+# Using curl (macOS/Linux)
+curl -fsSL https://opencode.ai/install | bash
+
+# Using npm
+npm install -g opencode
+
+# Using Homebrew (macOS)
+brew install sst/tap/opencode
 ```
 
-## Basic Configuration
+## Quick Start
 
-Create a basic configuration file:
-
-```tsx
-import { createMDX } from "fumadocs-mdx";
-
-export const { docs } = createMDX({
-  source: "./content/docs",
-});
-```
-
-## Development Server
-
-Start your development server:
+The fastest way to get started:
 
 ```bash
-npm run dev
+# Navigate to your project directory
+cd /path/to/your/project
+
+# Run Portal with npx
+npx openportal
 ```
 
-Your documentation site will be available at `http://localhost:3000`.
+Portal will:
+
+- Start the OpenCode server on port 4000
+- Start the web UI on port 3000
+- Open your browser automatically
+
+## Global Installation
+
+For frequent use, install Portal globally:
+
+```bash
+npm install -g openportal
+```
+
+Then run it from any project directory:
+
+```bash
+cd /path/to/your/project
+openportal
+```
+
+## CLI Options
+
+Customize Portal's behavior with these options:
+
+```bash
+openportal [options]
+
+Options:
+  -p, --port <port>       Port for web UI (default: 3000)
+  --opencode-port <port>  Port for OpenCode server (default: 4000)
+  -d, --directory <path>  Working directory for OpenCode
+  --no-browser            Don't open browser automatically
+  --skip-opencode-check   Skip OpenCode installation check
+```
+
+### Examples
+
+```bash
+# Use custom ports
+openportal --port 8080 --opencode-port 5000
+
+# Don't open browser
+openportal --no-browser
+
+# Specify a different project directory
+openportal -d /path/to/other/project
+```
+
+## Troubleshooting
+
+### OpenCode not found
+
+If you see "OpenCode is not installed", install it first:
+
+```bash
+curl -fsSL https://opencode.ai/install | bash
+```
+
+### Port already in use
+
+If port 3000 or 4000 is in use, specify different ports:
+
+```bash
+openportal --port 3001 --opencode-port 4001
+```

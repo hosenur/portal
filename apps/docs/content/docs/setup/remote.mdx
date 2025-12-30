@@ -1,58 +1,129 @@
 ---
 title: Remote Setup
-description: Setting up fumadocs for remote deployment
-icon: RemoteIcon
+description: Setting up OpenCode Portal on a remote server with Tailscale
 ---
 
-# Setup - Remote
+# Remote Setup
 
-This guide covers deploying fumadocs to remote hosting platforms.
+Access Portal from anywhere by running it on a VPS or home server with Tailscale.
 
-## Build Configuration
+## Architecture
 
-Configure your build for production:
-
-```json
-{
-  "scripts": {
-    "build": "fumadocs build",
-    "start": "fumadocs start"
-  }
-}
+```
+[Your Phone/Laptop] ---(Tailscale VPN)---> [VPS running Portal + OpenCode]
 ```
 
-## Deployment Options
+This setup allows you to:
 
-### Vercel
+- Code from your phone or tablet
+- Access your development environment from anywhere
+- Keep your projects running on a powerful server
 
-Deploy to Vercel with zero configuration:
+## Prerequisites
+
+On your remote server:
+
+1. **OpenCode** installed
+2. **Node.js 18+** installed
+3. **Tailscale** installed and connected
+
+## Server Setup
+
+### 1. Install OpenCode
 
 ```bash
-vercel
+curl -fsSL https://opencode.ai/install | bash
 ```
 
-### Netlify
-
-Deploy to Netlify:
+### 2. Install Portal globally
 
 ```bash
-netlify deploy --prod
+npm install -g openportal
 ```
 
-### Custom Server
-
-For custom server deployment:
+### 3. Install and configure Tailscale
 
 ```bash
-npm run build
-npm run start
+# Install Tailscale
+curl -fsSL https://tailscale.com/install.sh | sh
+
+# Start Tailscale and authenticate
+sudo tailscale up
 ```
 
-## Environment Variables
+### 4. Run Portal
 
-Set up environment variables for your deployment:
+Navigate to your project and start Portal:
 
 ```bash
-SITE_URL=https://your-docs-site.com
-ANALYTICS_ID=your-analytics-id
+cd /path/to/your/project
+openportal --no-browser
 ```
+
+Note the `--no-browser` flag since there's no GUI on the server.
+
+## Client Access
+
+### 1. Install Tailscale on your device
+
+Download Tailscale for your device:
+
+- [iOS](https://apps.apple.com/app/tailscale/id1470499037)
+- [Android](https://play.google.com/store/apps/details?id=com.tailscale.ipn)
+- [macOS/Windows/Linux](https://tailscale.com/download)
+
+### 2. Connect to your server
+
+Once connected to Tailscale, access Portal at:
+
+```
+http://[your-server-tailscale-ip]:3000
+```
+
+Find your server's Tailscale IP with:
+
+```bash
+tailscale ip -4
+```
+
+## Running as a Service
+
+To keep Portal running after you disconnect, use a process manager like PM2:
+
+```bash
+# Install PM2
+npm install -g pm2
+
+# Start Portal with PM2
+cd /path/to/your/project
+pm2 start openportal --name portal -- --no-browser
+
+# Save the process list
+pm2 save
+
+# Setup startup script
+pm2 startup
+```
+
+### Managing the service
+
+```bash
+# Check status
+pm2 status
+
+# View logs
+pm2 logs portal
+
+# Restart
+pm2 restart portal
+
+# Stop
+pm2 stop portal
+```
+
+## Security Considerations
+
+- Tailscale provides end-to-end encryption
+- Portal is only accessible via your Tailscale network
+- No ports need to be exposed to the public internet
+- Consider using Tailscale ACLs for additional access control

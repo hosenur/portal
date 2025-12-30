@@ -8,87 +8,63 @@ A web-based UI for [OpenCode](https://opencode.ai), the AI coding agent. This po
 
 ## Quick Start
 
-### Start OpenCode Server
+### Using npx (Recommended)
 
-Navigate to your project directory and run OpenCode using Docker:
+The easiest way to run OpenCode Portal is using npx:
 
 ```bash
 # Navigate to your project directory
 cd /path/to/your/project
 
-# Get the current directory name
-DIR_NAME=$(basename "$(pwd)")
-
-# Run OpenCode in Docker container
-docker run -it --rm -p 4000:4000 \
-  -v "$(pwd)":/$DIR_NAME -w /$DIR_NAME \
-  -v "$HOME/.gitconfig":/root/.gitconfig:ro \
-  -v "$HOME/.ssh":/root/.ssh:ro \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  --name opencode \
-  ghcr.io/sst/opencode:latest \
-  serve --port 4000 --hostname 0.0.0.0
+# Run OpenCode Portal
+npx openportal
 ```
 
-> **Note**: Omit the git configuration mounts if you do not need git setup:
-> ```bash
-> -v "$HOME/.gitconfig":/root/.gitconfig:ro \
-> -v "$HOME/.ssh":/root/.ssh:ro \
-> ```
+This will:
 
-This command:
-- Gets the current directory name and uses it as the container path
-- Maps port 4000 from the container to your host
-- Mounts your current directory to a path matching your project directory name in the container
-- Mounts your git configuration (`~/.gitconfig`) and SSH keys (`~/.ssh`) for git authentication
-- Allows Docker-in-Docker functionality for OpenCode's operations
-- Starts the OpenCode server in the background and keeps the container running
-- Uses the official OpenCode Docker image from GitHub Container Registry
+- Start the OpenCode server on port 4000
+- Start the web UI on port 3000
+- Open your browser automatically
 
-### Why Run OpenCode as Docker Image?
+### Installation
 
-Running OpenCode in a Docker container provides several benefits:
-
-- **Isolation**: Creates an isolated environment so you cannot mess up something outside the project scope
-- **Consistency**: Ensures OpenCode runs with the same dependencies and configuration across different machines
-- **Clean Environment**: No need to install OpenCode globally on your system
-- **Portability**: Easy to share and reproduce the exact same OpenCode setup
-- **Security**: Limits OpenCode's access to only the mounted directories
-
-### Start Portal Development Server
-
-In a new terminal, navigate to the portal directory and start the development server:
+You can also install globally:
 
 ```bash
-# Install dependencies
-bun install
+npm install -g openportal
 
-# Set environment variable
-export OPENCODE_SERVER_URL=http://localhost:4000
-
-# Run development server
-bun dev
+# Then run in any project directory
+openportal
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-### Docker
+### CLI Options
 
 ```bash
-# Build the image
-docker build -t opencode-portal .
+openportal [options]
 
-# Run the container
-docker run -p 3000:3000 -e OPENCODE_SERVER_URL=http://localhost:4000 opencode-portal
+Options:
+  -V, --version           output the version number
+  -p, --port <port>       Port for web UI (default: "3000")
+  --opencode-port <port>  Port for OpenCode server (default: "4000")
+  -d, --directory <path>  Working directory for OpenCode
+  --no-browser            Do not open browser automatically
+  --skip-opencode-check   Skip OpenCode installation check
+  -h, --help              display help for command
 ```
 
-### GitHub Container Registry
+### Prerequisites
 
-Pre-built images are available at:
+OpenCode must be installed on your system. Install it using one of these methods:
 
 ```bash
-docker pull ghcr.io/hosenur/portal:latest
-docker run -p 3000:3000 -e OPENCODE_SERVER_URL=http://localhost:4000 ghcr.io/hosenur/portal:latest
+# Using curl (macOS/Linux)
+curl -fsSL https://opencode.ai/install | bash
+
+# Using npm
+npm install -g opencode
+
+# Using Homebrew (macOS)
+brew install sst/tap/opencode
 ```
 
 ## Overview
@@ -104,11 +80,13 @@ OpenCode Portal connects to a running OpenCode server and provides:
 ## Why This Project?
 
 OpenCode comes with its own official web UI that you can access by running:
+
 ```bash
 opencode --port 4096
 ```
 
 However, the official UI is **currently under development** and has some limitations:
+
 - Not mobile responsive
 - Limited mobile experience
 
@@ -119,28 +97,7 @@ This project was inspired by my personal need to access OpenCode from my mobile 
 This portal is designed for remote access to your OpenCode instance. Deploy the portal on a VPS alongside OpenCode, then use [Tailscale](https://tailscale.com) (or similar VPN) to securely connect from your mobile device or any other machine.
 
 **Example setup:**
-```
-[Your Phone] ---(Tailscale)---> [VPS running Portal + OpenCode]
-```
 
-## Why This Project?
-
-OpenCode comes with its own official web UI that you can access by running:
-```bash
-opencode --port 4096
-```
-
-However, the official UI is **currently under development** and has some limitations:
-- Not mobile responsive
-- Limited mobile experience
-
-This project was inspired by my personal need to access OpenCode from my mobile device when I don't have my laptop around. The goal is to provide a mobile-first, responsive interface for interacting with OpenCode instances remotely.
-
-## Use Case
-
-This portal is designed for remote access to your OpenCode instance. Deploy the portal on a VPS alongside OpenCode, then use [Tailscale](https://tailscale.com) (or similar VPN) to securely connect from your mobile device or any other machine.
-
-**Example setup:**
 ```
 [Your Phone] ---(Tailscale)---> [VPS running Portal + OpenCode]
 ```
@@ -174,12 +131,7 @@ Contributions are welcome! Here's how you can help:
    ```bash
    bun install
    ```
-4. Set up environment variables:
-   ```bash
-   cp .env.example .env.local
-   # Edit .env.local with your configuration
-   ```
-5. Run the development server:
+4. Run the development server:
    ```bash
    bun dev
    ```
@@ -195,14 +147,14 @@ Contributions are welcome! Here's how you can help:
 ### Code Style
 
 - Use TypeScript for all new code
-- Follow the existing component patterns in `src/components/`
+- Follow the existing component patterns in `apps/web/src/components/`
 - Use Tailwind CSS for styling
 - Maintain consistent naming conventions
 - Add proper TypeScript types
 
 ### Getting Help
 
-- Check existing [issues](https://github.com/rahaman/portal/issues) before creating new ones
+- Check existing [issues](https://github.com/hosenur/portal/issues) before creating new ones
 - Join the discussion in existing issues
 - Be respectful and constructive in all interactions
 

@@ -5,7 +5,6 @@ import { ChevronUpDownIcon } from "@heroicons/react/24/outline";
 import {
   ArrowRightStartOnRectangleIcon,
   Cog6ToothIcon,
-  CommandLineIcon,
   HomeIcon,
   LifebuoyIcon,
   ShieldCheckIcon,
@@ -168,12 +167,6 @@ export default function AppSidebar(
               <SidebarLabel>
                 {creating ? "Creating..." : "New Session"}
               </SidebarLabel>
-            </SidebarItem>
-            <SidebarItem tooltip="Terminal">
-              <SidebarLink href="/terminal" className="gap-x-2">
-                <CommandLineIcon className="size-4 shrink-0" />
-                <SidebarLabel>Terminal</SidebarLabel>
-              </SidebarLink>
             </SidebarItem>
           </SidebarSection>
 
