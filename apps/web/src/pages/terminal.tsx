@@ -87,7 +87,20 @@ export default function TerminalPage() {
         fitAddon.fit();
         addLog("Terminal opened");
 
-        terminal.writeln("Connecting to container terminal...");
+        const currentTerminal = terminal;
+        const handleResize = () => {
+          fitAddon.fit();
+          if (socket?.connected && currentTerminal) {
+            socket.emit("resize", {
+              cols: currentTerminal.cols,
+              rows: currentTerminal.rows,
+            });
+          }
+        };
+
+        window.addEventListener("resize", handleResize);
+
+        terminal.writeln("Connecting to terminal...");
 
         // Initialize Socket.IO endpoint
         addLog("Fetching /api/terminal/ws...");
@@ -110,12 +123,18 @@ export default function TerminalPage() {
           terminal?.writeln(`Socket connected (${socket?.id})`);
         });
 
-        socket.on("connected", (data: { containerId: string }) => {
-          addLog(`Container connected: ${data.containerId}`);
+        socket.on("connected", (data: { pid: number; cwd: string }) => {
+          addLog(`Terminal connected: pid ${data.pid}`);
           setStatus("connected");
-          terminal?.writeln(`Container: ${data.containerId}`);
+          terminal?.writeln(`Terminal ready (${data.cwd})`);
           terminal?.writeln("");
           terminal?.focus();
+          if (currentTerminal && socket) {
+            socket.emit("resize", {
+              cols: currentTerminal.cols,
+              rows: currentTerminal.rows,
+            });
+          }
         });
 
         socket.on("output", (data: string) => {
@@ -131,10 +150,13 @@ export default function TerminalPage() {
           terminal?.writeln(`\r\n\x1b[31mError: ${data.message}\x1b[0m`);
         });
 
-        socket.on("disconnected", () => {
-          addLog("Docker disconnected");
-          setStatus("disconnected");
-        });
+        socket.on(
+          "disconnected",
+          (data: { exitCode: number; signal: number }) => {
+            addLog(`Terminal exited: code ${data.exitCode}`);
+            setStatus("disconnected");
+          },
+        );
 
         socket.on("disconnect", (reason) => {
           addLog(`Socket disconnected: ${reason}`);

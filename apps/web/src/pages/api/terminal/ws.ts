@@ -2,17 +2,11 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import type { Server as HTTPServer } from "node:http";
 import type { Socket as NetSocket } from "node:net";
 import { Server as SocketIOServer } from "socket.io";
-import WebSocket from "ws";
+import * as pty from "node-pty";
+import os from "node:os";
 
-// Environment variable for the Docker socket path
-const DOCKER_HOST = process.env.DOCKER_HOST || "unix:///var/run/docker.sock";
-const OPENCODE_CONTAINER =
-  process.env.OPENCODE_CONTAINER || process.env.HOSTNAME || "";
-
-console.log("[Terminal] Config:", {
-  DOCKER_HOST,
-  OPENCODE_CONTAINER,
-});
+const WORKING_DIRECTORY =
+  process.env.OPENCODE_WORKING_DIRECTORY || process.cwd();
 
 export const config = {
   api: {
@@ -32,6 +26,13 @@ interface ResponseWithSocket extends NextApiResponse {
   socket: SocketWithIO;
 }
 
+function getShell(): string {
+  if (os.platform() === "win32") {
+    return "powershell.exe";
+  }
+  return process.env.SHELL || "/bin/bash";
+}
+
 export default function handler(_req: NextApiRequest, res: ResponseWithSocket) {
   if (!res.socket.server.io) {
     console.log("[Terminal] Initializing Socket.IO server...");
@@ -48,114 +49,67 @@ export default function handler(_req: NextApiRequest, res: ResponseWithSocket) {
     io.on("connection", (socket) => {
       console.log("[Terminal] Client connected:", socket.id);
 
-      const containerId =
-        (socket.handshake.query.containerId as string) || OPENCODE_CONTAINER;
+      const shell = getShell();
+      console.log("[Terminal] Spawning shell:", shell, "in", WORKING_DIRECTORY);
 
-      console.log("[Terminal] Using container ID:", containerId);
+      let ptyProcess: pty.IPty | null = null;
 
-      if (!containerId) {
-        console.log("[Terminal] Error: No container ID");
+      try {
+        ptyProcess = pty.spawn(shell, [], {
+          name: "xterm-256color",
+          cols: 80,
+          rows: 24,
+          cwd: WORKING_DIRECTORY,
+          env: {
+            ...process.env,
+            TERM: "xterm-256color",
+          },
+        });
+
+        console.log("[Terminal] PTY spawned, pid:", ptyProcess.pid);
+        socket.emit("connected", {
+          pid: ptyProcess.pid,
+          cwd: WORKING_DIRECTORY,
+        });
+
+        ptyProcess.onData((data) => {
+          socket.emit("output", data);
+        });
+
+        ptyProcess.onExit(({ exitCode, signal }) => {
+          console.log("[Terminal] PTY exited:", exitCode, signal);
+          socket.emit("disconnected", { exitCode, signal });
+        });
+      } catch (error) {
+        const errMsg = error instanceof Error ? error.message : String(error);
+        console.error("[Terminal] Failed to spawn PTY:", errMsg);
         socket.emit("error", {
-          message:
-            "Container ID is required. Set OPENCODE_CONTAINER env variable.",
+          message: `Failed to spawn terminal: ${errMsg}`,
         });
         socket.disconnect();
         return;
       }
 
-      // Connect to Docker using attach WebSocket
-      let dockerWs: WebSocket | null = null;
-
-      const connectToDocker = () => {
-        let url: string;
-
-        if (DOCKER_HOST.startsWith("unix://")) {
-          const socketPath = DOCKER_HOST.replace("unix://", "");
-          url = `ws+unix://${socketPath}:/containers/${containerId}/attach/ws?stream=1&stdout=1&stderr=1&stdin=1`;
-        } else {
-          const host = DOCKER_HOST.replace(/^tcp:\/\//, "").replace(
-            /^https?:\/\//,
-            "",
-          );
-          url = `ws://${host}/containers/${containerId}/attach/ws?stream=1&stdout=1&stderr=1&stdin=1`;
-        }
-
-        console.log("[Terminal] Connecting to Docker:", url);
-        socket.emit("log", "Connecting to container...");
-
-        try {
-          dockerWs = new WebSocket(url);
-        } catch (error) {
-          const errMsg = error instanceof Error ? error.message : String(error);
-          console.error("[Terminal] Failed to create WebSocket:", errMsg);
-          socket.emit("error", {
-            message: `Failed to create connection: ${errMsg}`,
-          });
-          return;
-        }
-
-        dockerWs.on("open", () => {
-          console.log("[Terminal] Docker WebSocket connected");
-          socket.emit("connected", { containerId });
-        });
-
-        dockerWs.on("message", (data: Buffer) => {
-          socket.emit("output", data.toString());
-        });
-
-        dockerWs.on("close", (code, reason) => {
-          console.log(
-            "[Terminal] Docker WebSocket closed:",
-            code,
-            reason.toString(),
-          );
-          socket.emit("disconnected", { code, reason: reason.toString() });
-        });
-
-        dockerWs.on("error", (error: Error) => {
-          console.error("[Terminal] Docker WebSocket error:", error.message);
-          socket.emit("error", { message: error.message });
-        });
-
-        dockerWs.on("unexpected-response", (_req, res) => {
-          console.error("[Terminal] Unexpected response:", res.statusCode);
-          let body = "";
-          res.on("data", (chunk: Buffer) => {
-            body += chunk;
-          });
-          res.on("end", () => {
-            console.error("[Terminal] Response body:", body);
-            socket.emit("error", {
-              message: `Docker returned ${res.statusCode}: ${body}`,
-            });
-          });
-        });
-      };
-
-      // Handle input from client
       socket.on("input", (data: string) => {
-        if (dockerWs && dockerWs.readyState === WebSocket.OPEN) {
-          dockerWs.send(data);
+        if (ptyProcess) {
+          ptyProcess.write(data);
         }
       });
 
-      // Handle resize from client
       socket.on("resize", (data: { cols: number; rows: number }) => {
-        console.log("[Terminal] Resize:", data);
-        // Docker attach doesn't support resize via WebSocket
+        if (ptyProcess && data.cols > 0 && data.rows > 0) {
+          console.log("[Terminal] Resize:", data);
+          ptyProcess.resize(data.cols, data.rows);
+        }
       });
 
-      // Handle disconnect
       socket.on("disconnect", (reason) => {
         console.log("[Terminal] Client disconnected:", reason);
-        if (dockerWs) {
-          dockerWs.close();
-          dockerWs = null;
+        if (ptyProcess) {
+          ptyProcess.kill();
+          ptyProcess = null;
         }
       });
-
-      // Start connection
-      connectToDocker();
     });
 
     res.socket.server.io = io;
