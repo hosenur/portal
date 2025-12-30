@@ -101,6 +101,7 @@ export async function startOpencodeServer(
   const proc = spawn(command, args, {
     cwd: config.directory,
     stdio: ["ignore", "pipe", "pipe"],
+    shell: platform() === "win32",
     env: {
       ...process.env,
       FORCE_COLOR: "1",
