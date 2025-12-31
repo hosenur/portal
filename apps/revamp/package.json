@@ -12,9 +12,9 @@
     "@tanstack/react-router-devtools": "^1.0.0",
     "@types/dockerode": "^3.3.47",
     "dockerode": "^4.0.9",
-    "react": "^18.3.1",
+    "react": "^19.2.1",
     "react-aria-components": "^1.14.0",
-    "react-dom": "^18.3.1",
+    "react-dom": "^19.2.1",
     "swr": "^2.3.8",
     "tailwind-merge": "^3.4.0",
     "tailwind-variants": "^3.2.2",
@@ -25,11 +25,11 @@
     "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.1.0",
     "@tanstack/router-plugin": "^1.0.0",
-    "@types/react": "18",
-    "@types/react-dom": "18",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.3.1",
     "nitro": "latest",
-    "tailwindcss": "^4.1.0",
+    "tailwindcss": "^4.1.18",
     "vite": "npm:rolldown-vite"
   }
 }

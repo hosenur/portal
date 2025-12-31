@@ -6,7 +6,7 @@ import {
   GridListEmptyState,
 } from "@/components/ui/grid-list";
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/containers")({
   component: Index,
 });
 
