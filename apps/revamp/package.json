@@ -1,4 +1,5 @@
 {
+  "name": "revamp",
   "type": "module",
   "scripts": {
     "build": "vite build",
