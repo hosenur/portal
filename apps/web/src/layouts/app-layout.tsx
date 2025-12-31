@@ -3,6 +3,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import React from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import AppSidebarNav from "@/components/app-sidebar-nav";
+import Cmd from "@/components/cmd";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -19,6 +20,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <SidebarProvider
       className={`${geistSans.className} ${geistMono.variable} h-dvh overflow-hidden`}
     >
+      <Cmd />
       <AppSidebar intent="inset" collapsible="dock" />
       <SidebarInset className="overflow-hidden">
         <AppSidebarNav />
