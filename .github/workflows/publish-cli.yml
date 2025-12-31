@@ -1,0 +1,122 @@
+name: Publish CLI to npm
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/cli/**"
+      - "apps/web/**"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check if CLI version changed
+        id: version-check
+        run: |
+          CURRENT_VERSION=$(node -p "require('./packages/cli/package.json').version")
+
+          # Get previous version from the commit before
+          git show HEAD~1:packages/cli/package.json > /tmp/prev-package.json 2>/dev/null || echo '{"version":"0.0.0"}' > /tmp/prev-package.json
+          PREV_VERSION=$(node -p "require('/tmp/prev-package.json').version")
+
+          echo "current=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "previous=$PREV_VERSION" >> $GITHUB_OUTPUT
+
+          if [ "$CURRENT_VERSION" != "$PREV_VERSION" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "📦 Version changed: $PREV_VERSION → $CURRENT_VERSION"
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "⏭️ Version unchanged ($CURRENT_VERSION), skipping publish"
+          fi
+
+      - name: Setup Node.js
+        if: steps.version-check.outputs.changed == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        if: steps.version-check.outputs.changed == 'true'
+        run: npm ci
+
+      - name: Build CLI
+        if: steps.version-check.outputs.changed == 'true'
+        run: npm run build
+        working-directory: packages/cli
+
+      - name: Publish to npm
+        if: steps.version-check.outputs.changed == 'true'
+        run: npm publish --access public
+        working-directory: packages/cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create Git tag
+        if: steps.version-check.outputs.changed == 'true'
+        run: |
+          VERSION=${{ steps.version-check.outputs.current }}
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "cli-v${VERSION}" -m "Release CLI v${VERSION}"
+          git push origin "cli-v${VERSION}"
+
+      - name: Create GitHub Release
+        if: steps.version-check.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=${{ steps.version-check.outputs.current }}
+          PREV_VERSION=${{ steps.version-check.outputs.previous }}
+
+          # Generate release notes from commits
+          RELEASE_NOTES=$(cat <<'EOF'
+          ## What's New
+
+          See the [full changelog](https://github.com/${{ github.repository }}/compare/cli-v${PREV_VERSION}...cli-v${VERSION}) for all changes.
+
+          ## Installation
+
+          ```bash
+          # Using npx (recommended)
+          npx openportal
+
+          # Or install globally
+          npm install -g openportal
+          ```
+
+          ## Links
+
+          - 📦 [npm package](https://www.npmjs.com/package/openportal)
+          - 📖 [Documentation](https://github.com/${{ github.repository }}#readme)
+          EOF
+          )
+
+          gh release create "cli-v${VERSION}" \
+            --title "CLI v${VERSION}" \
+            --notes "$RELEASE_NOTES" \
+            --generate-notes
+
+      - name: Summary
+        if: steps.version-check.outputs.changed == 'true'
+        run: |
+          echo "## 🚀 Published to npm" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Package:** openportal" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ steps.version-check.outputs.current }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Install" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "npx openportal" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📝 [View Release](https://github.com/${{ github.repository }}/releases/tag/cli-v${{ steps.version-check.outputs.current }})" >> $GITHUB_STEP_SUMMARY
