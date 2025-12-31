@@ -22,14 +22,16 @@ program
     const resolvedDir = Bun.fileURLToPath(
       new URL(directory, `file://${process.cwd()}/`),
     );
+    const containerDir = resolvedDir;
+    const mountSpec = `${resolvedDir}:${containerDir}`;
 
     console.log(`Starting OpenCode container...`);
     console.log(`  Image: ${OPENCODE_IMAGE}`);
-    console.log(`  Mount: ${resolvedDir} -> /app`);
+    console.log(`  Mount: ${resolvedDir} -> ${containerDir}`);
+    console.log(`  Workdir: ${containerDir}`);
     console.log(`  Port: ${port}:4000`);
 
-    const detachFlag = detach ? "-d" : "";
-    const containerName = `--name ${name}`;
+    const detachArgs = detach ? ["-d"] : [];
 
     try {
       const existing = await $`docker ps -aq -f name=${name}`.text();
@@ -39,11 +41,11 @@ program
       }
 
       if (detach) {
-        await $`docker run ${detachFlag} ${containerName} -p ${port}:4000 -v ${resolvedDir}:/app ${OPENCODE_IMAGE}`;
+        await $`docker run ${detachArgs} --name ${name} -p ${port}:4000 -v ${mountSpec} -w ${containerDir} ${OPENCODE_IMAGE} serve`;
         console.log(`\nContainer started in background.`);
         console.log(`Access OpenCode at http://localhost:${port}`);
       } else {
-        await $`docker run ${containerName} --rm -it -p ${port}:4000 -v ${resolvedDir}:/app ${OPENCODE_IMAGE}`;
+        await $`docker run --name ${name} --rm -it -p ${port}:4000 -v ${mountSpec} -w ${containerDir} ${OPENCODE_IMAGE} serve`;
       }
     } catch (error) {
       if (error instanceof Error) {
