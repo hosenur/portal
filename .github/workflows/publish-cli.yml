@@ -8,6 +8,10 @@ on:
       - "packages/cli/**"
       - "apps/web/**"
 
+permissions:
+  id-token: write
+  contents: write
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -23,7 +27,6 @@ jobs:
         run: |
           CURRENT_VERSION=$(node -p "require('./packages/cli/package.json').version")
 
-          # Get previous version from the commit before
           git show HEAD~1:packages/cli/package.json > /tmp/prev-package.json 2>/dev/null || echo '{"version":"0.0.0"}' > /tmp/prev-package.json
           PREV_VERSION=$(node -p "require('/tmp/prev-package.json').version")
 
@@ -58,8 +61,6 @@ jobs:
         if: steps.version-check.outputs.changed == 'true'
         run: npm publish --access public
         working-directory: packages/cli
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create Git tag
         if: steps.version-check.outputs.changed == 'true'
@@ -73,37 +74,12 @@ jobs:
       - name: Create GitHub Release
         if: steps.version-check.outputs.changed == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           VERSION=${{ steps.version-check.outputs.current }}
-          PREV_VERSION=${{ steps.version-check.outputs.previous }}
-
-          # Generate release notes from commits
-          RELEASE_NOTES=$(cat <<'EOF'
-          ## What's New
-
-          See the [full changelog](https://github.com/${{ github.repository }}/compare/cli-v${PREV_VERSION}...cli-v${VERSION}) for all changes.
-
-          ## Installation
-
-          ```bash
-          # Using npx (recommended)
-          npx openportal
-
-          # Or install globally
-          npm install -g openportal
-          ```
-
-          ## Links
-
-          - 📦 [npm package](https://www.npmjs.com/package/openportal)
-          - 📖 [Documentation](https://github.com/${{ github.repository }}#readme)
-          EOF
-          )
 
           gh release create "cli-v${VERSION}" \
             --title "CLI v${VERSION}" \
-            --notes "$RELEASE_NOTES" \
             --generate-notes
 
       - name: Summary
