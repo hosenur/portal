@@ -1,6 +1,6 @@
 {
   "name": "openportal",
-  "version": "0.1.11",
+  "version": "0.1.14",
   "description": "CLI to run OpenCode Portal - a web UI for OpenCode AI coding agent",
   "type": "module",
   "bin": {
@@ -15,8 +15,10 @@
     "build": "npx tsx scripts/build.ts",
     "dev": "npx tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run build",
-    "publish:npm": "npm publish --access public"
+    "release": "npx tsx scripts/publish.ts",
+    "release:patch": "npx tsx scripts/publish.ts patch",
+    "release:minor": "npx tsx scripts/publish.ts minor",
+    "release:major": "npx tsx scripts/publish.ts major"
   },
   "dependencies": {
     "commander": "^13.1.0"
