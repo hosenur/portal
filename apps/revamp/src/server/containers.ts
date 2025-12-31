@@ -19,6 +19,12 @@ export default defineHandler(async () => {
       state: c.State,
       status: c.Status,
       ports: c.Ports,
+      mounts: (c.Mounts ?? []).map((mount) => ({
+        source: mount.Source,
+        destination: mount.Destination,
+        name: mount.Name,
+        type: mount.Type,
+      })),
       created: new Date(c.Created * 1000).toISOString(),
     })),
   };
