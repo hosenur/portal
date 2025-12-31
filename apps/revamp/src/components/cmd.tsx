@@ -12,22 +12,40 @@ import {
   useSessions,
   useCreateSession,
   useDeleteSession,
+  useInstances,
 } from "@/hooks/use-opencode";
+import { useInstanceStore, type Instance } from "@/stores/instance-store";
 import { IconGridPlus } from "@/components/icons/grid-plus-icon";
+import IconBox from "@/components/icons/box-icon";
+import { IconThemeDark } from "@/components/icons/theme-dark-icon";
+import { IconThemeLight } from "@/components/icons/theme-light-icon";
+import { IconThemeSystem } from "@/components/icons/theme-system-icon";
+import { IconManageInstances } from "@/components/icons/manage-instances-icon";
 import {
   TrashIcon,
   ChatBubbleLeftIcon,
-  SunIcon,
-  MoonIcon,
-  ComputerDesktopIcon,
+  ServerIcon,
 } from "@heroicons/react/24/solid";
 import { useTheme } from "@/providers/theme-provider";
+import { toast } from "@/components/ui/toast";
 import type { Session } from "@opencode-ai/sdk";
 
 function truncateTitle(title: string, maxLength = 40): string {
   if (title.length <= maxLength) return title;
   const halfLength = Math.floor((maxLength - 3) / 2);
   return `${title.slice(0, halfLength)}...${title.slice(-halfLength)}`;
+}
+
+interface InstanceData {
+  id: string;
+  name: string;
+  directory: string;
+  port: number;
+  hostname: string;
+  pid: number;
+  startedAt: string;
+  state: "running";
+  status: string;
 }
 
 export default function Cmd() {
@@ -37,11 +55,15 @@ export default function Cmd() {
   const location = useLocation();
   const params = useParams({ strict: false });
   const { data: sessionsData, mutate } = useSessions();
+  const { data: instancesData } = useInstances();
   const createSession = useCreateSession();
   const deleteSession = useDeleteSession();
   const { setTheme } = useTheme();
+  const currentInstance = useInstanceStore((s) => s.instance);
+  const setInstance = useInstanceStore((s) => s.setInstance);
 
   const sessions: Session[] = sessionsData ?? [];
+  const instances: InstanceData[] = instancesData?.instances ?? [];
   const currentSessionId = params.id as string | undefined;
   const isOnSessionPage =
     location.pathname.startsWith("/session/") && currentSessionId;
@@ -58,9 +80,11 @@ export default function Cmd() {
     try {
       const newSession = await createSession();
       await mutate();
+      toast.success("Session created");
       navigate({ to: "/session/$id", params: { id: newSession.id } });
     } catch (err) {
       console.error("Failed to create session:", err);
+      toast.error("Failed to create session");
     } finally {
       setCreating(false);
     }
@@ -73,9 +97,11 @@ export default function Cmd() {
     try {
       await deleteSession(currentSessionId);
       await mutate();
+      toast.success("Session deleted");
       navigate({ to: "/" });
     } catch (err) {
       console.error("Failed to delete session:", err);
+      toast.error("Failed to delete session");
     }
   }
 
@@ -87,6 +113,18 @@ export default function Cmd() {
   function handleThemeChange(theme: "light" | "dark" | "system") {
     setTheme(theme);
     setIsOpen(false);
+  }
+
+  function handleInstanceSelect(instance: InstanceData) {
+    const newInstance: Instance = {
+      id: instance.id,
+      name: instance.name,
+      port: instance.port,
+    };
+    setInstance(newInstance);
+    toast.success(`Switched to ${instance.name}`);
+    setIsOpen(false);
+    navigate({ to: "/" });
   }
 
   return (
@@ -122,28 +160,60 @@ export default function Cmd() {
               {creating ? "Creating..." : "New Session"}
             </CommandMenuLabel>
           </CommandMenuItem>
+          <CommandMenuItem
+            textValue="Manage instances"
+            onAction={() => {
+              setIsOpen(false);
+              navigate({ to: "/instances" });
+            }}
+          >
+            <IconManageInstances className="size-4 mr-2" />
+            <CommandMenuLabel>Manage Instances</CommandMenuLabel>
+          </CommandMenuItem>
         </CommandMenuSection>
+
+        {instances.length > 0 && (
+          <CommandMenuSection label="Switch Instance">
+            {instances.map((instance) => (
+              <CommandMenuItem
+                key={instance.id}
+                textValue={instance.name}
+                onAction={() => handleInstanceSelect(instance)}
+              >
+                {currentInstance?.id === instance.id ? (
+                  <IconBox className="size-4 mr-2" />
+                ) : (
+                  <ServerIcon className="size-4 mr-2" />
+                )}
+                <CommandMenuLabel>{instance.name}</CommandMenuLabel>
+                {currentInstance?.id === instance.id && (
+                  <div className="absolute right-2 size-2 rounded-full bg-primary" />
+                )}
+              </CommandMenuItem>
+            ))}
+          </CommandMenuSection>
+        )}
 
         <CommandMenuSection label="Theme">
           <CommandMenuItem
             textValue="Light theme"
             onAction={() => handleThemeChange("light")}
           >
-            <SunIcon className="size-4" />
+            <IconThemeLight className="size-4 mr-2" />
             <CommandMenuLabel>Light</CommandMenuLabel>
           </CommandMenuItem>
           <CommandMenuItem
             textValue="Dark theme"
             onAction={() => handleThemeChange("dark")}
           >
-            <MoonIcon className="size-4" />
+            <IconThemeDark className="size-4 mr-2" />
             <CommandMenuLabel>Dark</CommandMenuLabel>
           </CommandMenuItem>
           <CommandMenuItem
             textValue="System theme"
             onAction={() => handleThemeChange("system")}
           >
-            <ComputerDesktopIcon className="size-4" />
+            <IconThemeSystem className="size-4 mr-2" />
             <CommandMenuLabel>System</CommandMenuLabel>
           </CommandMenuItem>
         </CommandMenuSection>

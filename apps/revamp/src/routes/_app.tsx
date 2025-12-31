@@ -6,17 +6,17 @@ import {
   SidebarNav,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { useContainerStore } from "@/stores/container-store";
+import { useInstanceStore } from "@/stores/instance-store";
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
 });
 
 function AppLayout() {
-  const container = useContainerStore((s) => s.container);
+  const instance = useInstanceStore((s) => s.instance);
 
-  if (!container) {
-    return <Navigate to="/containers" />;
+  if (!instance) {
+    return <Navigate to="/instances" />;
   }
 
   return (

@@ -1,6 +1,7 @@
 import { createRootRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { RouterProvider } from "react-aria-components";
 import { ThemeProvider } from "@/providers/theme-provider";
+import { Toast } from "@/components/ui/toast";
 import Cmd from "@/components/cmd";
 
 export const Route = createRootRoute({
@@ -18,6 +19,7 @@ function RootComponent() {
             <Outlet />
           </section>
           <Cmd />
+          <Toast position="top-right" />
         </div>
       </RouterProvider>
     </ThemeProvider>

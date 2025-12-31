@@ -6,7 +6,7 @@ import type {
   ToolState,
   TextPart,
 } from "@opencode-ai/sdk";
-import { useContainerStore } from "@/stores/container-store";
+import { useInstanceStore } from "@/stores/instance-store";
 
 export type { Message, Part, ToolPart, ToolState, TextPart };
 
@@ -26,8 +26,8 @@ const fetcher = async (url: string): Promise<MessageWithParts[]> => {
 };
 
 function usePort() {
-  const container = useContainerStore((s) => s.container);
-  return container?.port ?? null;
+  const instance = useInstanceStore((s) => s.instance);
+  return instance?.port ?? null;
 }
 
 export function useSessionMessages(sessionId: string | undefined) {

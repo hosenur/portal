@@ -1,10 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState, useCallback, memo } from "react";
 import Markdown from "react-markdown";
+import { Ripples } from "ldrs/react";
+import "ldrs/react/Ripples.css";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader } from "@/components/ui/loader";
+import { ModelSelect } from "@/components/model-select";
 import IconBadgeSparkle from "@/components/icons/badge-sparkle-icon";
 import IconUser from "@/components/icons/user-icon";
 import IconMagnifier from "@/components/icons/magnifier-icon";
@@ -12,7 +15,8 @@ import IconEye from "@/components/icons/eye-icon";
 import IconPen from "@/components/icons/pen-icon";
 import IconSquareFeather from "@/components/icons/feather-icon";
 import SendIcon from "@/components/icons/send-icon";
-import { useContainerStore } from "@/stores/container-store";
+import { useInstanceStore } from "@/stores/instance-store";
+import { useModelStore } from "@/stores/model-store";
 import {
   useSessionMessages,
   addOptimisticMessage,
@@ -204,8 +208,8 @@ function hasVisibleContent(message: MessageWithParts): boolean {
 
 function SessionPage() {
   const { id: sessionId } = Route.useParams();
-  const container = useContainerStore((s) => s.container);
-  const port = container?.port ?? 0;
+  const instance = useInstanceStore((s) => s.instance);
+  const port = instance?.port ?? 0;
 
   const {
     messages,
@@ -213,6 +217,7 @@ function SessionPage() {
     error: messagesError,
   } = useSessionMessages(sessionId);
   const { mutate: mutateSessions } = useSessions();
+  const selectedModel = useModelStore((s) => s.selectedModel);
 
   const [sendError, setSendError] = useState<string | null>(null);
   const [input, setInput] = useState("");
@@ -292,7 +297,7 @@ function SessionPage() {
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: messageText }),
+            body: JSON.stringify({ text: messageText, model: selectedModel }),
           },
         );
 
@@ -310,7 +315,7 @@ function SessionPage() {
         removeOptimisticMessage(port, sessionId, messageId);
       }
     },
-    [sessionId, port, mutateSessions],
+    [sessionId, port, mutateSessions, selectedModel],
   );
 
   const processQueue = useCallback(async () => {
@@ -425,7 +430,7 @@ function SessionPage() {
         {sending && (
           <div className="py-3 px-6">
             <div className="flex items-center gap-2">
-              <Loader className="size-5" />
+              <Ripples size="30" speed="2" color="var(--color-primary)" />
               <span className="text-sm text-muted-fg">Thinking...</span>
             </div>
           </div>
@@ -450,7 +455,8 @@ function SessionPage() {
             className="w-full resize-none min-h-32 max-h-32 overflow-y-auto"
             rows={5}
           />
-          <div className="mt-3 flex items-center justify-end">
+          <div className="mt-3 flex items-center justify-end gap-2">
+            <ModelSelect />
             <Button
               type="submit"
               isDisabled={!input.trim()}

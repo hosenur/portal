@@ -9,16 +9,16 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as ContainersRouteImport } from './routes/containers'
+import { Route as InstancesRouteImport } from './routes/instances'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppSessionIdRouteImport } from './routes/_app/session/$id'
 
-const ContainersRoute = ContainersRouteImport.update({
-  id: '/containers',
-  path: '/containers',
+const InstancesRoute = InstancesRouteImport.update({
+  id: '/instances',
+  path: '/instances',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AboutRoute = AboutRouteImport.update({
@@ -48,14 +48,14 @@ const AppSessionIdRoute = AppSessionIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
-  '/containers': typeof ContainersRoute
+  '/instances': typeof InstancesRoute
   '/settings': typeof AppSettingsRoute
   '/': typeof AppIndexRoute
   '/session/$id': typeof AppSessionIdRoute
 }
 export interface FileRoutesByTo {
   '/about': typeof AboutRoute
-  '/containers': typeof ContainersRoute
+  '/instances': typeof InstancesRoute
   '/settings': typeof AppSettingsRoute
   '/': typeof AppIndexRoute
   '/session/$id': typeof AppSessionIdRoute
@@ -64,21 +64,21 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/about': typeof AboutRoute
-  '/containers': typeof ContainersRoute
+  '/instances': typeof InstancesRoute
   '/_app/settings': typeof AppSettingsRoute
   '/_app/': typeof AppIndexRoute
   '/_app/session/$id': typeof AppSessionIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/about' | '/containers' | '/settings' | '/' | '/session/$id'
+  fullPaths: '/about' | '/instances' | '/settings' | '/' | '/session/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/about' | '/containers' | '/settings' | '/' | '/session/$id'
+  to: '/about' | '/instances' | '/settings' | '/' | '/session/$id'
   id:
     | '__root__'
     | '/_app'
     | '/about'
-    | '/containers'
+    | '/instances'
     | '/_app/settings'
     | '/_app/'
     | '/_app/session/$id'
@@ -87,16 +87,16 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   AboutRoute: typeof AboutRoute
-  ContainersRoute: typeof ContainersRoute
+  InstancesRoute: typeof InstancesRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/containers': {
-      id: '/containers'
-      path: '/containers'
-      fullPath: '/containers'
-      preLoaderRoute: typeof ContainersRouteImport
+    '/instances': {
+      id: '/instances'
+      path: '/instances'
+      fullPath: '/instances'
+      preLoaderRoute: typeof InstancesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/about': {
@@ -154,7 +154,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   AboutRoute: AboutRoute,
-  ContainersRoute: ContainersRoute,
+  InstancesRoute: InstancesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

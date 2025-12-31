@@ -1,5 +1,5 @@
 import useSWR from "swr";
-import { useContainerStore } from "@/stores/container-store";
+import { useInstanceStore } from "@/stores/instance-store";
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);
@@ -10,8 +10,12 @@ const fetcher = async (url: string) => {
 };
 
 function usePort() {
-  const container = useContainerStore((s) => s.container);
-  return container?.port ?? null;
+  const instance = useInstanceStore((s) => s.instance);
+  return instance?.port ?? null;
+}
+
+export function useInstances() {
+  return useSWR("/api/instances", fetcher);
 }
 
 export function useSessions() {
@@ -56,11 +60,21 @@ export function useHealth() {
   return useSWR(port ? `/api/opencode/${port}/health` : null, fetcher);
 }
 
+export function useCurrentProject() {
+  const port = usePort();
+
+  return useSWR(port ? `/api/opencode/${port}/project/current` : null, fetcher);
+}
+
+export function useHostname() {
+  return useSWR("/api/system/hostname", fetcher);
+}
+
 export function useCreateSession() {
   const port = usePort();
 
   return async (title?: string) => {
-    if (!port) throw new Error("No container selected");
+    if (!port) throw new Error("No instance selected");
 
     const res = await fetch(`/api/opencode/${port}/session/create`, {
       method: "POST",
@@ -80,7 +94,7 @@ export function useDeleteSession() {
   const port = usePort();
 
   return async (sessionId: string) => {
-    if (!port) throw new Error("No container selected");
+    if (!port) throw new Error("No instance selected");
 
     const res = await fetch(`/api/opencode/${port}/session/${sessionId}`, {
       method: "DELETE",

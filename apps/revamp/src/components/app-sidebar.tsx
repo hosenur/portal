@@ -12,6 +12,8 @@ import {
 import { useState } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { Link as UILink } from "@/components/ui/link";
+import { toast } from "@/components/ui/toast";
+import IconBox from "@/components/icons/box-icon";
 import {
   Menu,
   MenuContent,
@@ -34,10 +36,49 @@ import {
   SidebarSection,
   SidebarSectionGroup,
 } from "@/components/ui/sidebar";
-import { useSessions, useCreateSession } from "@/hooks/use-opencode";
-import { useContainerStore } from "@/stores/container-store";
-import { useNavigate } from "@tanstack/react-router";
+import {
+  useSessions,
+  useCreateSession,
+  useDeleteSession,
+  useCurrentProject,
+  useHostname,
+} from "@/hooks/use-opencode";
+import { useInstanceStore } from "@/stores/instance-store";
+import { useNavigate, useMatch } from "@tanstack/react-router";
 import type { Session } from "@opencode-ai/sdk";
+
+interface Project {
+  id: string;
+  worktree: string;
+  vcs?: string;
+  time?: {
+    created?: number;
+    initialized?: number;
+    updated?: number;
+  };
+}
+
+function getProjectName(worktree: string): string {
+  const parts = worktree.split("/");
+  return parts[parts.length - 1] || worktree;
+}
+
+function CurrentProject() {
+  const { data: currentProject } = useCurrentProject() as {
+    data: Project | undefined;
+  };
+
+  const projectName = currentProject
+    ? getProjectName(currentProject.worktree)
+    : "Loading...";
+
+  return (
+    <div className="flex items-center gap-2 px-2 py-1.5">
+      <IconBox className="shrink-0" />
+      <div className="text-sm font-medium">{projectName}</div>
+    </div>
+  );
+}
 
 function truncateTitle(title: string, maxLength = 40): string {
   if (title.length <= maxLength) return title;
@@ -50,9 +91,12 @@ export default function AppSidebar(
 ) {
   const [creating, setCreating] = useState(false);
   const navigate = useNavigate();
-  const container = useContainerStore((s) => s.container);
+  const instance = useInstanceStore((s) => s.instance);
+  const { data: hostnameData } = useHostname();
+  const hostname = hostnameData?.hostname ?? "Loading...";
   const { data: sessionsData, mutate: mutateSessions } = useSessions();
   const createSession = useCreateSession();
+  const deleteSession = useDeleteSession();
   const sessions: Session[] = sessionsData ?? [];
 
   async function handleNewSession() {
@@ -61,16 +105,35 @@ export default function AppSidebar(
     try {
       const session = await createSession();
       await mutateSessions();
+      toast.success("Session created");
       navigate({ to: "/session/$id", params: { id: session.id } });
     } catch (error) {
       console.error("Failed to create session:", error);
+      toast.error("Failed to create session");
     } finally {
       setCreating(false);
     }
   }
 
+  const currentSessionMatch = useMatch({
+    from: "/_app/session/$id",
+    shouldThrow: false,
+  });
+  const currentSessionId = currentSessionMatch?.params?.id;
+
   async function handleDeleteSession(sessionId: string) {
-    console.log("Deleting session:", sessionId);
+    try {
+      await deleteSession(sessionId);
+      await mutateSessions();
+      toast.success("Session deleted");
+      // If we deleted the current session, navigate to home
+      if (currentSessionId === sessionId) {
+        navigate({ to: "/" });
+      }
+    } catch (error) {
+      console.error("Failed to delete session:", error);
+      toast.error("Failed to delete session");
+    }
   }
 
   return (
@@ -86,10 +149,7 @@ export default function AppSidebar(
       <SidebarContent>
         <SidebarSectionGroup>
           <SidebarSection>
-            <div className="flex items-center gap-2 px-2 py-1.5">
-              <img src="/logo.svg" alt="" className="size-4 shrink-0" />
-              <div className="text-sm font-medium">My Project</div>
-            </div>
+            <CurrentProject />
           </SidebarSection>
 
           <SidebarSection>
@@ -144,7 +204,7 @@ export default function AppSidebar(
         </SidebarSectionGroup>
       </SidebarContent>
 
-      <SidebarFooter>
+      <SidebarFooter className="flex flex-row justify-between gap-4 group-data-[state=collapsed]:flex-col">
         <Menu>
           <MenuTrigger
             className="flex w-full items-center justify-between"
@@ -154,10 +214,10 @@ export default function AppSidebar(
               <Avatar
                 className="size-8 *:size-8 group-data-[state=collapsed]:size-6 group-data-[state=collapsed]:*:size-6"
                 isSquare
-                initials={container?.name.slice(0, 2).toUpperCase() ?? "OC"}
+                initials={hostname.slice(0, 2).toUpperCase()}
               />
               <div className="in-data-[collapsible=dock]:hidden text-sm">
-                <SidebarLabel>{container?.name ?? "OpenCode"}</SidebarLabel>
+                <SidebarLabel>{hostname}</SidebarLabel>
               </div>
             </div>
             <ChevronUpDownIcon data-slot="chevron" />
@@ -168,7 +228,12 @@ export default function AppSidebar(
           >
             <MenuSection>
               <MenuHeader separator>
-                <span className="block">{container?.name ?? "OpenCode"}</span>
+                <span className="block">{hostname}</span>
+                {instance && (
+                  <span className="block text-muted-fg text-xs">
+                    {instance.name}
+                  </span>
+                )}
               </MenuHeader>
             </MenuSection>
 
