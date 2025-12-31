@@ -1,16 +1,10 @@
-import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Card, CardHeader, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import useSWR from "swr";
 import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableColumn,
-  TableRow,
-  TableCell,
-} from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
+  GridList,
+  GridListItem,
+  GridListEmptyState,
+} from "@/components/ui/grid-list";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -23,6 +17,12 @@ interface Container {
   state: string;
   status: string;
   ports: Array<{ PrivatePort: number; PublicPort?: number; Type: string }>;
+  mounts: Array<{
+    source?: string;
+    destination?: string;
+    name?: string;
+    type?: string;
+  }>;
   created: string;
 }
 
@@ -31,155 +31,69 @@ interface ContainersResponse {
   containers: Container[];
 }
 
+const fetcher = async (url: string) => {
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Request failed: ${res.status}`);
+  }
+  return res.json();
+};
+
 function Index() {
-  const [containers, setContainers] = useState<ContainersResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [wsStatus, setWsStatus] = useState("connecting");
-  const [wsResponse, setWsResponse] = useState("Waiting for WebSocket...");
+  const {
+    data: containers,
+    error,
+  } = useSWR<ContainersResponse>("/api/containers", fetcher);
 
-  const fetchContainers = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const res = await fetch("/api/containers");
-      const data = await res.json();
-      setContainers(data);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to fetch containers",
-      );
-    } finally {
-      setLoading(false);
+  const formatMount = (mount: Container["mounts"][number]) => {
+    const value = mount.source ?? mount.destination ?? mount.name ?? "Unknown";
+    if (value === "Unknown") {
+      return "Unknown";
     }
-  };
-
-  useEffect(() => {
-    fetchContainers();
-  }, []);
-
-  useEffect(() => {
-    const url = new URL("/api/ws", window.location.origin);
-    url.protocol = url.protocol.replace("http", "ws");
-
-    const socket = new WebSocket(url.toString());
-
-    const handleMessage = (event: MessageEvent) => {
-      const raw =
-        typeof event.data === "string" ? event.data : String(event.data);
-
-      try {
-        const parsed = JSON.parse(raw) as { message?: string };
-        setWsResponse(parsed.message ?? raw);
-      } catch {
-        setWsResponse(raw);
-      }
-    };
-
-    socket.addEventListener("open", () => {
-      setWsStatus("open");
-      socket.send("ping");
-    });
-    socket.addEventListener("message", handleMessage);
-    socket.addEventListener("close", () => setWsStatus("closed"));
-    socket.addEventListener("error", () => setWsStatus("error"));
-
-    return () => {
-      socket.removeEventListener("message", handleMessage);
-      socket.close();
-    };
-  }, []);
-
-  const getStateIntent = (state: string) => {
-    switch (state.toLowerCase()) {
-      case "running":
-        return "success";
-      case "exited":
-        return "danger";
-      case "paused":
-        return "warning";
-      default:
-        return "secondary";
-    }
+    const normalized = value.replace(/\\+/g, "/").replace(/\/+$/g, "");
+    const parts = normalized.split("/");
+    return parts.at(-1) || value;
   };
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader
-          title="OpenCode Containers"
-          description="Docker containers running ghcr.io/sst/opencode image"
-        />
-        <CardContent>
-          <div className="mb-4 flex items-center gap-4">
-            <Button onPress={fetchContainers} isDisabled={loading}>
-              {loading ? "Refreshing..." : "Refresh"}
-            </Button>
-            <div className="flex items-center gap-2 text-sm text-muted-fg">
-              <span>WebSocket:</span>
-              <Badge
-                intent={
-                  wsStatus === "open"
-                    ? "success"
-                    : wsStatus === "error"
-                      ? "danger"
-                      : "warning"
-                }
-              >
-                {wsStatus}
-              </Badge>
-              <span className="text-xs">{wsResponse}</span>
-            </div>
-          </div>
+    <div className="mx-auto w-full max-w-2xl space-y-6">
+      {error && (
+        <div className="rounded-md bg-danger-subtle p-3 text-danger-subtle-fg">
+          {error instanceof Error ? error.message : "Failed to fetch containers"}
+        </div>
+      )}
 
-          {error && (
-            <div className="mb-4 rounded-md bg-danger-subtle p-3 text-danger-subtle-fg">
-              {error}
-            </div>
-          )}
-
-          {containers && containers.total === 0 ? (
-            <div className="py-8 text-center text-muted-fg">
+      {containers ? (
+        <GridList
+          aria-label="Docker containers"
+          items={containers.containers}
+          className="gap-y-3"
+          renderEmptyState={() => (
+            <GridListEmptyState className="text-center text-muted-fg">
               No OpenCode containers found
-            </div>
-          ) : containers ? (
-            <Table aria-label="Docker containers">
-              <TableHeader>
-                <TableColumn isRowHeader>ID</TableColumn>
-                <TableColumn>Name</TableColumn>
-                <TableColumn>Image</TableColumn>
-                <TableColumn>State</TableColumn>
-                <TableColumn>Status</TableColumn>
-                <TableColumn>Created</TableColumn>
-              </TableHeader>
-              <TableBody items={containers.containers}>
-                {(container) => (
-                  <TableRow id={container.id}>
-                    <TableCell>
-                      <code className="text-xs">{container.id}</code>
-                    </TableCell>
-                    <TableCell>{container.name}</TableCell>
-                    <TableCell>
-                      <code className="text-xs">{container.image}</code>
-                    </TableCell>
-                    <TableCell>
-                      <Badge intent={getStateIntent(container.state)}>
-                        {container.state}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{container.status}</TableCell>
-                    <TableCell>
-                      {new Date(container.created).toLocaleString()}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          ) : (
-            <div className="py-8 text-center text-muted-fg">Loading...</div>
+            </GridListEmptyState>
           )}
-        </CardContent>
-      </Card>
+        >
+          {(container) => {
+            const mountLabel =
+              container.mounts.length > 0
+                ? container.mounts.map(formatMount).join(", ")
+                : "No mounts";
+
+            return (
+              <GridListItem
+                id={container.id}
+                textValue={mountLabel}
+                className="py-3 sm:py-4"
+              >
+                {mountLabel}
+              </GridListItem>
+            );
+          }}
+        </GridList>
+      ) : (
+        <div className="py-8 text-center text-muted-fg">Loading...</div>
+      )}
     </div>
   );
 }
