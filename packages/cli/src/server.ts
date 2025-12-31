@@ -1,7 +1,8 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { resolve, dirname, delimiter } from "node:path";
-import { existsSync, symlinkSync, unlinkSync, lstatSync } from "node:fs";
+import { existsSync, symlinkSync, lstatSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { platform } from "node:os";
 import {
   log,
   logError,
@@ -93,7 +94,11 @@ function ensureNodeModulesSymlink(modulesDir: string): void {
         return;
       }
     }
-    symlinkSync("_modules", nodeModulesPath, platform() === "win32" ? "junction" : "dir");
+    symlinkSync(
+      "_modules",
+      nodeModulesPath,
+      platform() === "win32" ? "junction" : "dir",
+    );
   } catch {}
 }
 
