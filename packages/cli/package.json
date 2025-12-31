@@ -1,52 +1,23 @@
 {
-  "name": "openportal",
-  "version": "0.1.17",
-  "description": "CLI to run OpenCode Portal - a web UI for OpenCode AI coding agent",
+  "name": "@portal/cli",
+  "version": "0.1.0",
   "type": "module",
   "bin": {
-    "openportal": "bin/openportal.js"
+    "portal": "./src/index.ts",
+    "cli-new": "./src/index.ts"
   },
-  "files": [
-    "bin",
-    "dist",
-    "web"
-  ],
   "scripts": {
-    "build": "npx tsx scripts/build.ts",
-    "dev": "npx tsx src/cli.ts",
-    "typecheck": "tsc --noEmit",
-    "release": "npx tsx scripts/publish.ts",
-    "release:patch": "npx tsx scripts/publish.ts patch",
-    "release:minor": "npx tsx scripts/publish.ts minor",
-    "release:major": "npx tsx scripts/publish.ts major"
+    "dev": "bun run src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "commander": "^13.1.0"
+    "@commander-js/extra-typings": "^14.0.0",
+    "commander": "^14.0.0",
+    "get-port-please": "^3.2.0"
   },
   "devDependencies": {
-    "@types/node": "^22.10.2",
-    "tsx": "^4.19.2",
+    "@types/bun": "^1.3.5",
     "typescript": "^5.9.3"
-  },
-  "engines": {
-    "node": ">=18"
-  },
-  "keywords": [
-    "opencode",
-    "ai",
-    "coding",
-    "assistant",
-    "portal",
-    "web-ui",
-    "cli"
-  ],
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/hosenur/portal.git"
-  },
-  "homepage": "https://github.com/hosenur/portal#readme",
-  "bugs": {
-    "url": "https://github.com/hosenur/portal/issues"
   }
 }
