@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+/dist
+/web
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*

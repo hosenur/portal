@@ -23,22 +23,22 @@ export interface ServerConfig {
 
 interface WebDirectoryResult {
   webDir: string;
-  modulesDir: string | null;
+  modulesDirs: string[];
 }
 
 function findWebDirectory(): WebDirectoryResult | null {
   const possiblePaths = [
     {
       webDir: resolve(__dirname, "..", "web", "apps", "web"),
-      modulesDir: resolve(__dirname, "..", "web", "_modules"),
+      rootDir: resolve(__dirname, "..", "web"),
     },
     {
       webDir: resolve(__dirname, "..", "web"),
-      modulesDir: resolve(__dirname, "..", "web", "_modules"),
+      rootDir: resolve(__dirname, "..", "web"),
     },
     {
       webDir: resolve(__dirname, "..", "..", "web"),
-      modulesDir: resolve(__dirname, "..", "..", "web", "_modules"),
+      rootDir: resolve(__dirname, "..", "..", "web"),
     },
     {
       webDir: resolve(
@@ -51,16 +51,32 @@ function findWebDirectory(): WebDirectoryResult | null {
         ".next",
         "standalone",
       ),
-      modulesDir: null,
+      rootDir: resolve(
+        __dirname,
+        "..",
+        "..",
+        "..",
+        "apps",
+        "web",
+        ".next",
+        "standalone",
+      ),
     },
   ];
 
-  for (const { webDir, modulesDir } of possiblePaths) {
+  for (const { webDir, rootDir } of possiblePaths) {
     const serverPath = resolve(webDir, "server.js");
     if (existsSync(serverPath)) {
-      const resolvedModulesDir =
-        modulesDir && existsSync(modulesDir) ? modulesDir : null;
-      return { webDir, modulesDir: resolvedModulesDir };
+      const modulesDirs = new Set<string>();
+      const appModulesDir = resolve(webDir, "_modules");
+      if (existsSync(appModulesDir)) {
+        modulesDirs.add(appModulesDir);
+      }
+      const rootModulesDir = resolve(rootDir, "_modules");
+      if (existsSync(rootModulesDir)) {
+        modulesDirs.add(rootModulesDir);
+      }
+      return { webDir, modulesDirs: [...modulesDirs] };
     }
   }
   return null;
@@ -92,18 +108,20 @@ export async function startWebServer(
     return null;
   }
 
-  const { webDir, modulesDir } = result;
+  const { webDir, modulesDirs } = result;
 
-  if (modulesDir) {
+  for (const modulesDir of modulesDirs) {
     ensureNodeModulesSymlink(modulesDir);
   }
 
   log(`Starting web server on port ${config.port}...`);
 
   const serverPath = resolve(webDir, "server.js");
-  const nodePathEnv = modulesDir
-    ? [modulesDir, process.env.NODE_PATH].filter(Boolean).join(delimiter)
-    : process.env.NODE_PATH;
+  const nodePathEntries = [...modulesDirs, process.env.NODE_PATH].filter(
+    Boolean,
+  );
+  const nodePathEnv =
+    nodePathEntries.length > 0 ? nodePathEntries.join(delimiter) : undefined;
 
   const proc = spawn("node", [serverPath], {
     cwd: webDir,
@@ -113,7 +131,7 @@ export async function startWebServer(
       PORT: config.port.toString(),
       HOSTNAME: "0.0.0.0",
       NODE_ENV: "production",
-      NODE_PATH: nodePathEnv,
+      ...(nodePathEnv ? { NODE_PATH: nodePathEnv } : {}),
       OPENCODE_SERVER_URL: `http://${config.opencodeHost}:${config.opencodePort}`,
     },
   });

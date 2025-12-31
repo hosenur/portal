@@ -1,8 +1,10 @@
-import { $ } from "bun";
+import { execSync } from "node:child_process";
 import { resolve, join } from "node:path";
 import { existsSync, mkdirSync, cpSync, rmSync, readdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
-const CLI_DIR = resolve(import.meta.dirname, "..");
+const __dirname = fileURLToPath(new URL(".", import.meta.url));
+const CLI_DIR = resolve(__dirname, "..");
 const APPS_WEB_DIR = resolve(CLI_DIR, "..", "..", "apps", "web");
 const WEB_OUTPUT_DIR = resolve(CLI_DIR, "web");
 
@@ -19,25 +21,56 @@ const DEV_ONLY_PACKAGES = [
   "turbo",
 ];
 
-function removeDevPackages(nodeModulesDir: string): void {
-  const bunDir = join(nodeModulesDir, ".bun");
-  if (!existsSync(bunDir)) return;
+function run(command: string, cwd: string): void {
+  execSync(command, { cwd, stdio: "inherit" });
+}
 
-  const entries = readdirSync(bunDir);
+function removeDevPackages(nodeModulesDir: string): void {
+  if (!existsSync(nodeModulesDir)) return;
+
+  const entries = readdirSync(nodeModulesDir);
   let removedCount = 0;
 
   for (const entry of entries) {
     const isDevPackage = DEV_ONLY_PACKAGES.some(
-      (pkg) => entry.startsWith(pkg + "@") || entry.startsWith(pkg + "+"),
+      (pkg) =>
+        entry === pkg ||
+        entry.startsWith(pkg + "-") ||
+        (entry.startsWith("@") && entry.includes(pkg)),
     );
 
     if (isDevPackage) {
-      const fullPath = join(bunDir, entry);
+      const fullPath = join(nodeModulesDir, entry);
       try {
         rmSync(fullPath, { recursive: true });
         removedCount++;
       } catch {}
     }
+  }
+
+  const scopedDirs = entries.filter((e) => e.startsWith("@"));
+  for (const scopedDir of scopedDirs) {
+    const scopedPath = join(nodeModulesDir, scopedDir);
+    if (!existsSync(scopedPath)) continue;
+
+    const scopedEntries = readdirSync(scopedPath);
+    for (const entry of scopedEntries) {
+      const isDevPackage = DEV_ONLY_PACKAGES.some((pkg) => entry.includes(pkg));
+      if (isDevPackage) {
+        const fullPath = join(scopedPath, entry);
+        try {
+          rmSync(fullPath, { recursive: true });
+          removedCount++;
+        } catch {}
+      }
+    }
+
+    try {
+      const remaining = readdirSync(scopedPath);
+      if (remaining.length === 0) {
+        rmSync(scopedPath, { recursive: true });
+      }
+    } catch {}
   }
 
   console.log(`   ✓ Removed ${removedCount} dev-only packages`);
@@ -64,15 +97,24 @@ function removeSourceMaps(dir: string): void {
   console.log("   ✓ Removed source maps and type definitions");
 }
 
+function getDirectorySize(dir: string): string {
+  try {
+    const output = execSync(`du -sh "${dir}"`, { encoding: "utf-8" });
+    return output.trim().split("\t")[0];
+  } catch {
+    return "unknown";
+  }
+}
+
 async function build(): Promise<void> {
   console.log("Building OpenPortal CLI...\n");
 
   console.log("1. Compiling TypeScript...");
-  await $`bun tsc`.cwd(CLI_DIR);
+  run("npx tsc", CLI_DIR);
   console.log("   ✓ TypeScript compiled\n");
 
   console.log("2. Building Next.js web app...");
-  await $`bun run build`.cwd(APPS_WEB_DIR);
+  run("npm run build", APPS_WEB_DIR);
   console.log("   ✓ Next.js built\n");
 
   console.log("3. Copying standalone output...");
@@ -93,12 +135,13 @@ async function build(): Promise<void> {
 
   cpSync(standaloneSrc, WEB_OUTPUT_DIR, { recursive: true });
 
-  const webStaticDest = resolve(WEB_OUTPUT_DIR, ".next", "static");
-  mkdirSync(resolve(WEB_OUTPUT_DIR, ".next"), { recursive: true });
-  cpSync(staticSrc, webStaticDest, { recursive: true });
+  const appWebDir = resolve(WEB_OUTPUT_DIR, "apps", "web");
+  const appStaticDest = resolve(appWebDir, ".next", "static");
+  mkdirSync(appStaticDest, { recursive: true });
+  cpSync(staticSrc, appStaticDest, { recursive: true });
 
   if (existsSync(publicSrc)) {
-    const publicDest = resolve(WEB_OUTPUT_DIR, "public");
+    const publicDest = resolve(appWebDir, "public");
     cpSync(publicSrc, publicDest, { recursive: true });
   }
 
@@ -114,19 +157,41 @@ async function build(): Promise<void> {
     "5. Renaming node_modules to _modules (npm ignores node_modules)...",
   );
   const renamedModulesDir = resolve(WEB_OUTPUT_DIR, "_modules");
-  if (existsSync(nodeModulesDir)) {
-    if (existsSync(renamedModulesDir)) {
-      rmSync(renamedModulesDir, { recursive: true });
+  const renameNodeModules = (
+    sourceDir: string,
+    targetDir: string,
+    label: string,
+  ): void => {
+    if (!existsSync(sourceDir)) {
+      console.log(`   ⚠ ${label} node_modules not found, skipping rename`);
+      return;
     }
-    cpSync(nodeModulesDir, renamedModulesDir, { recursive: true });
-    rmSync(nodeModulesDir, { recursive: true });
-    console.log("   ✓ Renamed node_modules to _modules\n");
-  } else {
-    console.log("   ⚠ node_modules not found, skipping rename\n");
-  }
+    if (existsSync(targetDir)) {
+      rmSync(targetDir, { recursive: true });
+    }
+    cpSync(sourceDir, targetDir, { recursive: true });
+    rmSync(sourceDir, { recursive: true });
+    console.log(`   ✓ Renamed ${label} node_modules to _modules`);
+  };
 
-  const { stdout } = await $`du -sh ${WEB_OUTPUT_DIR}`.quiet();
-  const size = stdout.toString().trim().split("\t")[0];
+  renameNodeModules(nodeModulesDir, renamedModulesDir, "root");
+
+  const appNodeModulesDir = resolve(
+    WEB_OUTPUT_DIR,
+    "apps",
+    "web",
+    "node_modules",
+  );
+  const appRenamedModulesDir = resolve(
+    WEB_OUTPUT_DIR,
+    "apps",
+    "web",
+    "_modules",
+  );
+  renameNodeModules(appNodeModulesDir, appRenamedModulesDir, "apps/web");
+  console.log("");
+
+  const size = getDirectorySize(WEB_OUTPUT_DIR);
 
   console.log("Build complete!\n");
   console.log("Package contents:");
