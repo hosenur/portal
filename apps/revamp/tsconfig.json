@@ -6,7 +6,7 @@
     "types": ["vite/client", "react", "react-dom"],
     "jsx": "react-jsx",
     "paths": {
-      "~/*": ["./*"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src"]
