@@ -1,5 +1,6 @@
 import { defineConfig } from "nitro";
 
 export default defineConfig({
-  serverDir: "./server",
+  srcDir: "src/server",
+  serverDir: ".",
 });
