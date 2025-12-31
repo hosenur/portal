@@ -2,8 +2,10 @@
 
 import { $ } from "bun";
 import { Command } from "commander";
+import { getPort } from "get-port-please";
 
 const OPENCODE_IMAGE = "ghcr.io/sst/opencode:1.0.218";
+const OPENCODE_CONTAINER_PORT = 4096;
 
 const program = new Command()
   .name("portal")
@@ -14,22 +16,22 @@ program
   .command("run")
   .description("Run an OpenCode container mounting the current directory")
   .option("-d, --directory <path>", "Directory to mount", process.cwd())
-  .option("-p, --port <port>", "Port to expose", "4000")
   .option("--name <name>", "Container name", "opencode")
   .option("--detach", "Run container in background", false)
   .action(async (options) => {
-    const { directory, port, name, detach } = options;
+    const { directory, name, detach } = options;
     const resolvedDir = Bun.fileURLToPath(
       new URL(directory, `file://${process.cwd()}/`),
     );
     const containerDir = resolvedDir;
     const mountSpec = `${resolvedDir}:${containerDir}`;
+    const hostPort = await getPort();
 
     console.log(`Starting OpenCode container...`);
     console.log(`  Image: ${OPENCODE_IMAGE}`);
     console.log(`  Mount: ${resolvedDir} -> ${containerDir}`);
     console.log(`  Workdir: ${containerDir}`);
-    console.log(`  Port: ${port}:4000`);
+    console.log(`  Port: ${hostPort}:${OPENCODE_CONTAINER_PORT}`);
 
     const detachArgs = detach ? ["-d"] : [];
 
@@ -41,11 +43,11 @@ program
       }
 
       if (detach) {
-        await $`docker run ${detachArgs} --name ${name} -p ${port}:4000 -v ${mountSpec} -w ${containerDir} ${OPENCODE_IMAGE} serve`;
+        await $`docker run ${detachArgs} --name ${name} -p ${hostPort}:${OPENCODE_CONTAINER_PORT} -v ${mountSpec} -w ${containerDir} ${OPENCODE_IMAGE} serve`;
         console.log(`\nContainer started in background.`);
-        console.log(`Access OpenCode at http://localhost:${port}`);
+        console.log(`Access OpenCode at http://localhost:${hostPort}`);
       } else {
-        await $`docker run --name ${name} --rm -it -p ${port}:4000 -v ${mountSpec} -w ${containerDir} ${OPENCODE_IMAGE} serve`;
+        await $`docker run --name ${name} --rm -it -p ${hostPort}:${OPENCODE_CONTAINER_PORT} -v ${mountSpec} -w ${containerDir} ${OPENCODE_IMAGE} serve`;
       }
     } catch (error) {
       if (error instanceof Error) {
