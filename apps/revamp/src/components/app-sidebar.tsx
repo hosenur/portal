@@ -7,7 +7,6 @@ import {
   LifebuoyIcon,
   ShieldCheckIcon,
   TrashIcon,
-  CubeIcon,
   PlusIcon,
 } from "@heroicons/react/24/solid";
 import { useState } from "react";
@@ -78,7 +77,7 @@ export default function AppSidebar(
     <Sidebar {...props}>
       <SidebarHeader>
         <UILink href="/" className="flex items-center gap-x-2">
-          <CubeIcon className="size-6 text-primary" data-slot="icon" />
+          <img src="/logo.svg" alt="OpenCode Portal" className="size-6" />
           <SidebarLabel className="font-medium">
             OpenCode <span className="text-muted-fg">Portal</span>
           </SidebarLabel>
@@ -88,7 +87,7 @@ export default function AppSidebar(
         <SidebarSectionGroup>
           <SidebarSection>
             <div className="flex items-center gap-2 px-2 py-1.5">
-              <CubeIcon className="size-4 shrink-0 text-muted-fg" />
+              <img src="/logo.svg" alt="" className="size-4 shrink-0" />
               <div className="text-sm font-medium">My Project</div>
             </div>
           </SidebarSection>
@@ -145,7 +144,7 @@ export default function AppSidebar(
         </SidebarSectionGroup>
       </SidebarContent>
 
-      <SidebarFooter className="flex flex-row justify-between gap-4 group-data-[state=collapsed]:flex-col">
+      <SidebarFooter>
         <Menu>
           <MenuTrigger
             className="flex w-full items-center justify-between"

@@ -75,3 +75,21 @@ export function useCreateSession() {
     return res.json();
   };
 }
+
+export function useDeleteSession() {
+  const port = usePort();
+
+  return async (sessionId: string) => {
+    if (!port) throw new Error("No container selected");
+
+    const res = await fetch(`/api/opencode/${port}/session/${sessionId}`, {
+      method: "DELETE",
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to delete session: ${res.status}`);
+    }
+
+    return res.json();
+  };
+}

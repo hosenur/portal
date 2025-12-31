@@ -1,11 +1,27 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <link rel="icon" type="image/svg+xml" href="/nitro.svg" />
-    <title>Nitro + Vite</title>
+    <title>OpenCode Portal</title>
     <link rel="stylesheet" href="/src/main.css" />
+    <script>
+      (function () {
+        const storageKey = "intentui-theme";
+        const theme = localStorage.getItem(storageKey);
+        const systemDark = window.matchMedia(
+          "(prefers-color-scheme: dark)",
+        ).matches;
+        if (
+          theme === "dark" ||
+          (theme === "system" && systemDark) ||
+          (!theme && systemDark)
+        ) {
+          document.documentElement.classList.add("dark");
+        }
+      })();
+    </script>
   </head>
   <body>
     <main>
