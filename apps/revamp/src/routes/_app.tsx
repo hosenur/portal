@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet } from "@tanstack/react-router";
+import { createFileRoute, Outlet, Navigate } from "@tanstack/react-router";
 import AppSidebar from "@/components/app-sidebar";
 import {
   SidebarInset,
@@ -6,12 +6,19 @@ import {
   SidebarNav,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
+import { useContainerStore } from "@/stores/container-store";
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
 });
 
 function AppLayout() {
+  const container = useContainerStore((s) => s.container);
+
+  if (!container) {
+    return <Navigate to="/containers" />;
+  }
+
   return (
     <SidebarProvider className="h-dvh overflow-hidden">
       <AppSidebar intent="inset" collapsible="dock" />

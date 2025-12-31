@@ -45,6 +45,7 @@
       "name": "revamp",
       "dependencies": {
         "@heroicons/react": "^2.2.0",
+        "@opencode-ai/sdk": "^1.0.218",
         "@tanstack/react-router": "^1.0.0",
         "@tanstack/react-router-devtools": "^1.0.0",
         "@types/dockerode": "^3.3.47",
@@ -52,15 +53,17 @@
         "react": "^19.2.1",
         "react-aria-components": "^1.14.0",
         "react-dom": "^19.2.1",
+        "react-markdown": "^10.1.0",
         "swr": "^2.3.8",
         "tailwind-merge": "^3.4.0",
         "tailwind-variants": "^3.2.2",
         "tailwindcss-react-aria-components": "^2.0.1",
         "tw-animate-css": "^1.4.0",
+        "zustand": "^5.0.9",
       },
       "devDependencies": {
         "@tailwindcss/typography": "^0.5.19",
-        "@tailwindcss/vite": "^4.1.0",
+        "@tailwindcss/vite": "^4.1.17",
         "@tanstack/router-plugin": "^1.0.0",
         "@types/react": "^19.2.7",
         "@types/react-dom": "^19.2.3",
@@ -88,7 +91,7 @@
         "react-dom": "^19.2.1",
         "react-markdown": "^10.1.0",
         "sonner": "^2.0.7",
-        "swr": "^2.3.7",
+        "swr": "^2.3.8",
         "tailwind-merge": "^3.4.0",
         "tailwind-variants": "^3.2.2",
         "tailwindcss-react-aria-components": "^2.0.1",
@@ -110,10 +113,12 @@
       "version": "0.1.0",
       "bin": {
         "portal": "./src/index.ts",
+        "cli-new": "./src/index.ts",
       },
       "dependencies": {
         "@commander-js/extra-typings": "^14.0.0",
         "commander": "^14.0.0",
+        "get-port-please": "^3.2.0",
       },
       "devDependencies": {
         "@types/bun": "^1.3.5",
@@ -1306,6 +1311,8 @@
 
     "get-port": ["get-port@5.1.1", "", {}, "sha512-g/Q1aTSDOxFpchXC4i8ZWvxA1lnPqx/JHqcpIw0/LX9T8x/GBbi6YnlN5nhaKIFkT8oFsscUKgDJYxfwfS6QsQ=="],
 
+    "get-port-please": ["get-port-please@3.2.0", "", {}, "sha512-I9QVvBw5U/hw3RmWpYKRumUeaDgxTPd401x364rLmWBJcOQ753eov1eTgzDqRG9bqFIfDc7gfzcQEWrUri3o1A=="],
+
     "get-proto": ["get-proto@1.0.1", "", { "dependencies": { "dunder-proto": "^1.0.1", "es-object-atoms": "^1.0.0" } }, "sha512-sTSfBjoXBp89JvIKIefqw7U2CCebsc74kiY6awiGogKtoSGbgjYE/G/+l9sF3MWFPNc9IcoOC4ODfKHfxFmp0g=="],
 
     "get-tsconfig": ["get-tsconfig@4.13.0", "", { "dependencies": { "resolve-pkg-maps": "^1.0.0" } }, "sha512-1VKTZJCwBrvbd+Wn3AOgQP/2Av+TfTCOlE4AcRJE72W1ksZXbAx8PPBR9RzgTeSPzlPMHrbANMH3LbltH73wxQ=="],
@@ -1949,6 +1956,8 @@
     "yargs-parser": ["yargs-parser@21.1.1", "", {}, "sha512-tVpsJW7DdjecAiFpbIB1e3qxIQsE6NoPc5/eTdrbbIC4h0LVsWhnoa3g+m2HclBIujHzsxZ4VJVA+GUuc2/LBw=="],
 
     "zod": ["zod@4.3.0", "", {}, "sha512-dXOXgs5b9ulOPotwXMEsAUoUPL2glchysY0RTJYVqJ7bU0Y5gqE1k3v19eCWrJsczrbae/Dt9+ajrJbr8Ot4uw=="],
+
+    "zustand": ["zustand@5.0.9", "", { "peerDependencies": { "@types/react": ">=18.0.0", "immer": ">=9.0.6", "react": ">=18.0.0", "use-sync-external-store": ">=1.2.0" }, "optionalPeers": ["@types/react", "immer", "react", "use-sync-external-store"] }, "sha512-ALBtUj0AfjJt3uNRQoL1tL2tMvj6Gp/6e39dnfT6uzpelGru8v1tPOGBzayOWbPJvujM8JojDk3E1LxeFisBNg=="],
 
     "zwitch": ["zwitch@2.0.4", "", {}, "sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A=="],
 

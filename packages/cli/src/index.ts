@@ -16,39 +16,34 @@ program
   .command("run")
   .description("Run an OpenCode container mounting the current directory")
   .option("-d, --directory <path>", "Directory to mount", process.cwd())
-  .option("--name <name>", "Container name", "opencode")
-  .option("--detach", "Run container in background", false)
+  .option("--name <name>", "Container name")
   .action(async (options) => {
-    const { directory, name, detach } = options;
+    const { directory } = options;
     const resolvedDir = Bun.fileURLToPath(
       new URL(directory, `file://${process.cwd()}/`),
     );
+    const dirName = resolvedDir.split("/").pop() || "opencode";
+    const name = options.name || `opencode-${dirName}`;
     const containerDir = resolvedDir;
     const mountSpec = `${resolvedDir}:${containerDir}`;
     const hostPort = await getPort();
 
     console.log(`Starting OpenCode container...`);
+    console.log(`  Name: ${name}`);
     console.log(`  Image: ${OPENCODE_IMAGE}`);
     console.log(`  Mount: ${resolvedDir} -> ${containerDir}`);
-    console.log(`  Workdir: ${containerDir}`);
     console.log(`  Port: ${hostPort}:${OPENCODE_CONTAINER_PORT}`);
 
-    const detachArgs = detach ? ["-d"] : [];
-
     try {
-      const existing = await $`docker ps -aq -f name=${name}`.text();
+      const existing = await $`docker ps -aq -f name=^/${name}$`.text();
       if (existing.trim()) {
         console.log(`Removing existing container: ${name}`);
         await $`docker rm -f ${name}`.quiet();
       }
 
-      if (detach) {
-        await $`docker run ${detachArgs} --name ${name} -p ${hostPort}:${OPENCODE_CONTAINER_PORT} -v ${mountSpec} -w ${containerDir} ${OPENCODE_IMAGE} serve`;
-        console.log(`\nContainer started in background.`);
-        console.log(`Access OpenCode at http://localhost:${hostPort}`);
-      } else {
-        await $`docker run --name ${name} --rm -it -p ${hostPort}:${OPENCODE_CONTAINER_PORT} -v ${mountSpec} -w ${containerDir} ${OPENCODE_IMAGE} serve`;
-      }
+      await $`docker run -d --name ${name} -p ${hostPort}:${OPENCODE_CONTAINER_PORT} -v ${mountSpec} -w ${containerDir} ${OPENCODE_IMAGE} serve --hostname 0.0.0.0`.quiet();
+      console.log(`\nContainer started.`);
+      console.log(`Access OpenCode at http://localhost:${hostPort}`);
     } catch (error) {
       if (error instanceof Error) {
         console.error(`Failed to start container: ${error.message}`);

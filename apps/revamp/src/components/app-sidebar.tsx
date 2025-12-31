@@ -10,7 +10,6 @@ import {
   CubeIcon,
   PlusIcon,
 } from "@heroicons/react/24/solid";
-import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { Link as UILink } from "@/components/ui/link";
@@ -36,19 +35,10 @@ import {
   SidebarSection,
   SidebarSectionGroup,
 } from "@/components/ui/sidebar";
-
-interface Session {
-  id: string;
-  title: string;
-}
-
-const DUMMY_SESSIONS: Session[] = [
-  { id: "1", title: "Fix authentication bug" },
-  { id: "2", title: "Add dark mode support" },
-  { id: "3", title: "Refactor API endpoints" },
-  { id: "4", title: "Update dependencies" },
-  { id: "5", title: "Implement caching" },
-];
+import { useSessions, useCreateSession } from "@/hooks/use-opencode";
+import { useContainerStore } from "@/stores/container-store";
+import { useNavigate } from "@tanstack/react-router";
+import type { Session } from "@opencode-ai/sdk";
 
 function truncateTitle(title: string, maxLength = 40): string {
   if (title.length <= maxLength) return title;
@@ -60,14 +50,24 @@ export default function AppSidebar(
   props: React.ComponentProps<typeof Sidebar>,
 ) {
   const [creating, setCreating] = useState(false);
-  const hostname = "localhost";
-  const sessions = DUMMY_SESSIONS;
+  const navigate = useNavigate();
+  const container = useContainerStore((s) => s.container);
+  const { data: sessionsData, mutate: mutateSessions } = useSessions();
+  const createSession = useCreateSession();
+  const sessions: Session[] = sessionsData ?? [];
 
   async function handleNewSession() {
+    if (creating) return;
     setCreating(true);
-    setTimeout(() => {
+    try {
+      const session = await createSession();
+      await mutateSessions();
+      navigate({ to: "/session/$id", params: { id: session.id } });
+    } catch (error) {
+      console.error("Failed to create session:", error);
+    } finally {
       setCreating(false);
-    }, 1000);
+    }
   }
 
   async function handleDeleteSession(sessionId: string) {
@@ -155,10 +155,10 @@ export default function AppSidebar(
               <Avatar
                 className="size-8 *:size-8 group-data-[state=collapsed]:size-6 group-data-[state=collapsed]:*:size-6"
                 isSquare
-                initials={hostname.slice(0, 2).toUpperCase()}
+                initials={container?.name.slice(0, 2).toUpperCase() ?? "OC"}
               />
               <div className="in-data-[collapsible=dock]:hidden text-sm">
-                <SidebarLabel>{hostname}</SidebarLabel>
+                <SidebarLabel>{container?.name ?? "OpenCode"}</SidebarLabel>
               </div>
             </div>
             <ChevronUpDownIcon data-slot="chevron" />
@@ -169,7 +169,7 @@ export default function AppSidebar(
           >
             <MenuSection>
               <MenuHeader separator>
-                <span className="block">{hostname}</span>
+                <span className="block">{container?.name ?? "OpenCode"}</span>
               </MenuHeader>
             </MenuSection>
 
