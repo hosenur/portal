@@ -252,6 +252,47 @@ body {
   }
 }
 
+/* Markdown prose table styling */
+.prose table {
+  display: block;
+  overflow-x: auto;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.prose thead {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+}
+
+.prose tbody {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+}
+
+.prose tr {
+  display: table-row;
+}
+
+.prose th,
+.prose td {
+  display: table-cell;
+  white-space: normal;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+}
+
+.prose th {
+  background-color: var(--muted);
+  font-weight: 600;
+}
+
+.prose tbody tr:nth-child(even) {
+  background-color: var(--muted);
+}
+
 @utility touch-target {
   position: relative;
   &::before {
