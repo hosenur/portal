@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback, memo, useMemo } from "react";
 import { useRouter } from "next/router";
 import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import NumberFlow from "@number-flow/react";
 import AppLayout from "@/layouts/app-layout";
 import { ModelSelect } from "@/components/model-select";
@@ -233,7 +234,7 @@ const MessageItem = memo(function MessageItem({
             <div
               className={`prose prose-sm dark:prose-invert max-w-none overflow-x-hidden ${!isAssistant ? "text-muted-fg" : ""}`}
             >
-              <Markdown>{textContent}</Markdown>
+              <Markdown remarkPlugins={[remarkGfm]}>{textContent}</Markdown>
             </div>
           </div>
         </div>
