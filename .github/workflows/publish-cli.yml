@@ -41,12 +41,23 @@ jobs:
             echo "⏭️ Version unchanged ($CURRENT_VERSION), skipping publish"
           fi
 
+      - name: Setup Bun
+        if: steps.version-check.outputs.changed == 'true'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "latest"
+
       - name: Setup Node.js
         if: steps.version-check.outputs.changed == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
+
+      - name: Build Web App
+        if: steps.version-check.outputs.changed == 'true'
+        run: bun run build
+        working-directory: apps/web
 
       - name: Install dependencies
         if: steps.version-check.outputs.changed == 'true'

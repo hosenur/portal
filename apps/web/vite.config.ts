@@ -12,7 +12,9 @@ export default defineConfig({
     }),
     react(),
     tailwindcss(),
-    nitro(),
+    nitro({
+      preset: "standalone",
+    }),
   ],
   resolve: {
     alias: {

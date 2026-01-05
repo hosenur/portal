@@ -1,0 +1,91 @@
+name: Publish Nightly to npm
+
+on:
+  push:
+    branches:
+      - dev
+
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  publish-nightly:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "latest"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Build Web App
+        run: bun run build
+        working-directory: apps/web
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build CLI
+        run: npm run build
+        working-directory: packages/cli
+
+      - name: Get nightly version
+        id: version
+        run: |
+          VERSION=$(date +%Y.%m.%d.%H%M)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📦 Nightly version: $VERSION"
+
+      - name: Update package.json version
+        run: |
+          cd packages/cli
+          npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version || true
+          cat package.json | grep version
+
+      - name: Publish to npm (nightly)
+        run: npm publish --tag nightly --access public
+        working-directory: packages/cli
+
+      - name: Create Git tag
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "cli-nightly-${VERSION}" -m "Nightly CLI v${VERSION}"
+          git push origin "cli-nightly-${VERSION}"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+
+          gh release create "cli-nightly-${VERSION}" \
+            --title "CLI Nightly v${VERSION}" \
+            --notes "Automated nightly build from dev branch" \
+            --prerelease
+
+      - name: Summary
+        run: |
+          echo "## 🌙 Published nightly to npm" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Package:** openportal" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** nightly" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Install" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "npm install -g openportal@nightly" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

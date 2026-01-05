@@ -1,10 +1,9 @@
 {
-  "name": "@portal/cli",
-  "version": "0.1.0",
+  "name": "openportal",
+  "version": "0.1.17",
   "type": "module",
   "bin": {
-    "portal": "./src/index.ts",
-    "cli-new": "./src/index.ts"
+    "openportal": "./dist/index.js"
   },
   "scripts": {
     "dev": "bun run src/index.ts",
@@ -12,12 +11,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@commander-js/extra-typings": "^14.0.0",
-    "commander": "^14.0.0",
     "get-port-please": "^3.2.0"
   },
   "devDependencies": {
     "@types/bun": "^1.3.5",
     "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "bun": ">=1.3.0"
   }
 }
