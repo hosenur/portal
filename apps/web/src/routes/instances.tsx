@@ -51,10 +51,12 @@ function InstancesPage() {
   const instances: InstanceData[] = data?.instances ?? [];
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-8 py-10">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Instances</h1>
-        <p className="text-muted-fg text-sm">
+    <div className="container mx-auto max-w-4xl space-y-8 px-4 py-10">
+      <div className="space-y-2">
+        <h1 className="bg-gradient-to-r from-fg to-muted-fg bg-clip-text text-3xl font-bold tracking-tight text-transparent sm:text-4xl">
+          Instances
+        </h1>
+        <p className="text-lg text-muted-fg">
           Select an active OpenCode instance to connect.
         </p>
       </div>
@@ -69,14 +71,14 @@ function InstancesPage() {
         <GridList
           aria-label="OpenCode instances"
           items={instances}
-          className="gap-3"
+          className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2"
           selectionMode="single"
           onAction={(key) => {
             const instance = instances.find((i) => i.id === key);
             if (instance) handleSelect(instance);
           }}
           renderEmptyState={() => (
-            <GridListEmptyState className="flex flex-col items-center gap-2 py-12 text-center text-muted-fg">
+            <GridListEmptyState className="flex flex-col items-center gap-2 py-12 text-center text-muted-fg border border-dashed border-border/50 rounded-xl bg-muted/5">
               <div className="flex size-12 items-center justify-center rounded-full bg-muted/50">
                 <ServerIcon className="size-6 text-muted-fg/50" />
               </div>
@@ -99,28 +101,32 @@ function InstancesPage() {
               <GridListItem
                 id={instance.id}
                 textValue={dirName}
-                className="group relative flex cursor-default select-none items-center gap-4 rounded-lg border bg-bg p-4 shadow-xs outline-none transition-colors hover:bg-muted/50 focus:bg-accent focus:text-accent-fg data-[selected]:bg-accent data-[selected]:text-accent-fg"
+                className="group relative flex cursor-default select-none items-center gap-4 rounded-xl border border-border/50 bg-bg p-4 shadow-sm outline-none transition-all hover:border-border hover:shadow-md hover:bg-muted/5 focus:ring-2 focus:ring-ring focus:ring-offset-2 data-[selected]:border-primary data-[selected]:ring-1 data-[selected]:ring-primary"
                 isDisabled={!isRunning}
               >
-                <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted/50 text-muted-fg group-hover:bg-bg group-focus:bg-bg">
-                  <IconBox className="size-5" />
+                <div className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-orange-500/10 text-orange-600 transition-colors group-hover:bg-orange-500/20">
+                  <IconBox className="size-6" />
                 </div>
-                <div className="flex flex-1 flex-col gap-1 min-w-0">
+                <div className="flex flex-1 flex-col gap-1.5 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium truncate">{dirName}</span>
+                    <span className="font-medium tracking-tight truncate text-fg text-base">
+                      {dirName}
+                    </span>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-fg">
+                      <span className="rounded-md bg-muted/50 px-2 py-0.5 text-xs font-medium text-muted-fg border border-border/50">
                         :{instance.port}
                       </span>
                       {isRunning && (
-                        <span className="flex items-center gap-1.5 text-xs text-success">
-                          <span className="size-1.5 rounded-full bg-success" />
-                          Running
+                        <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-500">
+                          <span className="relative flex size-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full size-2 bg-emerald-500"></span>
+                          </span>
                         </span>
                       )}
                     </div>
                   </div>
-                  <span className="text-xs text-muted-fg truncate font-mono">
+                  <span className="text-xs text-muted-fg truncate font-mono bg-muted/10 px-1.5 py-0.5 rounded w-fit max-w-full">
                     {instance.directory}
                   </span>
                 </div>

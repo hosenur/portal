@@ -1,11 +1,10 @@
-import {
-  Link as LinkPrimitive,
-  type LinkProps as LinkPrimitiveProps,
-} from "react-aria-components";
-import { cx } from "@/lib/primitive";
+"use client"
+
+import { Link as LinkPrimitive, type LinkProps as LinkPrimitiveProps } from "react-aria-components"
+import { cx } from "@/lib/primitive"
 
 interface LinkProps extends LinkPrimitiveProps {
-  ref?: React.RefObject<HTMLAnchorElement>;
+  ref?: React.RefObject<HTMLAnchorElement>
 }
 
 const Link = ({ className, ref, ...props }: LinkProps) => {
@@ -23,8 +22,8 @@ const Link = ({ className, ref, ...props }: LinkProps) => {
       )}
       {...props}
     />
-  );
-};
+  )
+}
 
-export type { LinkProps };
-export { Link };
+export type { LinkProps }
+export { Link }

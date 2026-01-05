@@ -22,6 +22,7 @@ import IconSquareFeather from "@/components/icons/feather-icon";
 import SendIcon from "@/components/icons/send-icon";
 import { useInstanceStore } from "@/stores/instance-store";
 import { useModelStore } from "@/stores/model-store";
+import { useBreadcrumb } from "@/contexts/breadcrumb-context";
 import {
   useSessionMessages,
   addOptimisticMessage,
@@ -33,6 +34,7 @@ import {
   type ToolPart,
 } from "@/hooks/use-session-messages";
 import { useSessions } from "@/hooks/use-opencode";
+import type { Session } from "@opencode-ai/sdk";
 
 export const Route = createFileRoute("/_app/session/$id")({
   component: SessionPage,
@@ -221,8 +223,19 @@ function SessionPage() {
     isLoading: loading,
     error: messagesError,
   } = useSessionMessages(sessionId);
-  const { mutate: mutateSessions } = useSessions();
+  const { data: sessionsData, mutate: mutateSessions } = useSessions();
   const selectedModel = useModelStore((s) => s.selectedModel);
+  const { setPageTitle } = useBreadcrumb();
+
+  const sessions: Session[] = sessionsData ?? [];
+  const currentSession = sessions.find((s) => s.id === sessionId);
+
+  useEffect(() => {
+    if (currentSession?.title) {
+      setPageTitle(currentSession.title);
+    }
+    return () => setPageTitle(null);
+  }, [currentSession?.title, setPageTitle]);
 
   const [sendError, setSendError] = useState<string | null>(null);
   const [input, setInput] = useState("");
