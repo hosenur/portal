@@ -5,6 +5,7 @@ import {
   useEffect,
   type ReactNode,
 } from "react";
+import { useAccentStore, type AccentColor } from "@/stores/accent-store";
 
 type Theme = "light" | "dark" | "system";
 
@@ -12,6 +13,8 @@ interface ThemeContextType {
   theme: Theme;
   setTheme: (theme: Theme) => void;
   resolvedTheme: "light" | "dark";
+  accentColor: AccentColor;
+  setAccentColor: (color: AccentColor) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -38,6 +41,10 @@ function applyTheme(theme: Theme) {
   return resolved;
 }
 
+function applyAccentColor(accentColor: AccentColor) {
+  document.documentElement.setAttribute("data-accent", accentColor);
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
     if (typeof window === "undefined") return "system";
@@ -48,6 +55,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     if (typeof window === "undefined") return "light";
     return theme === "system" ? getSystemTheme() : theme;
   });
+
+  const accentColor = useAccentStore((state) => state.accentColor);
+  const setAccentColor = useAccentStore((state) => state.setAccentColor);
 
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);
@@ -60,6 +70,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const resolved = applyTheme(theme);
     setResolvedTheme(resolved);
   }, [theme]);
+
+  useEffect(() => {
+    applyAccentColor(accentColor);
+  }, [accentColor]);
 
   useEffect(() => {
     if (theme !== "system") return;
@@ -75,7 +89,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [theme]);
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, resolvedTheme }}>
+    <ThemeContext.Provider
+      value={{ theme, setTheme, resolvedTheme, accentColor, setAccentColor }}
+    >
       {children}
     </ThemeContext.Provider>
   );
