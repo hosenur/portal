@@ -3,12 +3,19 @@
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { getPort } from "get-port-please";
 import { homedir } from "os";
-import { join, resolve } from "path";
+import { join, resolve, dirname } from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const CONFIG_PATH = join(homedir(), ".portal.json");
 const DEFAULT_HOSTNAME = "0.0.0.0";
 const DEFAULT_PORT = 3000;
 const DEFAULT_OPENCODE_PORT = 4000;
+
+// Path to the bundled web app
+const WEB_SERVER_PATH = join(__dirname, "..", "web", "server", "index.mjs");
 
 interface PortalInstance {
   id: string;
@@ -17,7 +24,8 @@ interface PortalInstance {
   port: number;
   opencodePort: number;
   hostname: string;
-  pid: number;
+  opencodePid: number;
+  webPid: number;
   startedAt: string;
 }
 
@@ -123,28 +131,40 @@ async function cmdRun(options: Record<string, string | boolean | undefined>) {
   );
   if (existingIndex !== -1) {
     const existing = config.instances[existingIndex];
-    if (isProcessRunning(existing.pid)) {
+    if (
+      isProcessRunning(existing.opencodePid) ||
+      isProcessRunning(existing.webPid)
+    ) {
       console.log(`OpenPortal is already running for this directory.`);
       console.log(`  Name: ${existing.name}`);
       console.log(`  Port: ${existing.port}`);
       console.log(`  OpenCode Port: ${existing.opencodePort}`);
-      console.log(`  PID: ${existing.pid}`);
+      console.log(`  OpenCode PID: ${existing.opencodePid}`);
+      console.log(`  Web PID: ${existing.webPid}`);
       console.log(`\nAccess OpenPortal at http://localhost:${existing.port}`);
       return;
     }
     config.instances.splice(existingIndex, 1);
   }
 
+  // Check if web server exists
+  if (!existsSync(WEB_SERVER_PATH)) {
+    console.error(`❌ Web server not found at ${WEB_SERVER_PATH}`);
+    console.error(`   The web app may not be bundled correctly.`);
+    process.exit(1);
+  }
+
   console.log(`Starting OpenPortal...`);
   console.log(`  Name: ${name}`);
   console.log(`  Directory: ${directory}`);
-  console.log(`  Port: ${port}`);
+  console.log(`  Web UI Port: ${port}`);
   console.log(`  OpenCode Port: ${opencodePort}`);
   console.log(`  Hostname: ${hostname}`);
 
   try {
     const resolvedDir = resolve(directory);
 
+    // Start OpenCode server
     console.log(`\nStarting OpenCode server...`);
     const opencodeProc = Bun.spawn(
       [
@@ -162,6 +182,20 @@ async function cmdRun(options: Record<string, string | boolean | undefined>) {
       },
     );
 
+    // Start Web UI server
+    console.log(`Starting Web UI server...`);
+    const webProc = Bun.spawn(["bun", "run", WEB_SERVER_PATH], {
+      cwd: dirname(WEB_SERVER_PATH),
+      stdio: ["ignore", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        PORT: String(port),
+        HOST: hostname,
+        NITRO_PORT: String(port),
+        NITRO_HOST: hostname,
+      },
+    });
+
     const instance: PortalInstance = {
       id: generateId(),
       name,
@@ -169,14 +203,17 @@ async function cmdRun(options: Record<string, string | boolean | undefined>) {
       port,
       opencodePort,
       hostname,
-      pid: opencodeProc.pid,
+      opencodePid: opencodeProc.pid,
+      webPid: webProc.pid,
       startedAt: new Date().toISOString(),
     };
 
     config.instances.push(instance);
     writeConfig(config);
 
-    console.log(`✅ OpenCode started. (PID: ${opencodeProc.pid})`);
+    console.log(`\n✅ OpenPortal started!`);
+    console.log(`   OpenCode PID: ${opencodeProc.pid}`);
+    console.log(`   Web UI PID: ${webProc.pid}`);
     console.log(`\n📱 Access OpenPortal at http://localhost:${port}`);
     console.log(`🔧 OpenCode API at http://localhost:${opencodePort}`);
   } catch (error) {
@@ -203,14 +240,22 @@ function cmdStop(options: Record<string, string | boolean | undefined>) {
   }
 
   try {
-    process.kill(instance.pid, "SIGTERM");
-    console.log(`Stopped: ${instance.name} (PID: ${instance.pid})`);
+    process.kill(instance.opencodePid, "SIGTERM");
+    console.log(`Stopped OpenCode (PID: ${instance.opencodePid})`);
   } catch {
-    console.log("Instance was already stopped.");
+    console.log("OpenCode was already stopped.");
+  }
+
+  try {
+    process.kill(instance.webPid, "SIGTERM");
+    console.log(`Stopped Web UI (PID: ${instance.webPid})`);
+  } catch {
+    console.log("Web UI was already stopped.");
   }
 
   config.instances = config.instances.filter((i) => i.id !== instance.id);
   writeConfig(config);
+  console.log(`\nStopped: ${instance.name}`);
 }
 
 function cmdList() {
@@ -228,10 +273,11 @@ function cmdList() {
   const validInstances: PortalInstance[] = [];
 
   for (const instance of config.instances) {
-    const running = isProcessRunning(instance.pid);
-    const status = running ? "running" : "stopped";
+    const opencodeRunning = isProcessRunning(instance.opencodePid);
+    const webRunning = isProcessRunning(instance.webPid);
+    const status = opencodeRunning && webRunning ? "running" : "stopped";
 
-    if (running) {
+    if (opencodeRunning || webRunning) {
       validInstances.push(instance);
     }
 
@@ -251,7 +297,10 @@ function cmdClean() {
   const validInstances: PortalInstance[] = [];
 
   for (const instance of config.instances) {
-    if (isProcessRunning(instance.pid)) {
+    if (
+      isProcessRunning(instance.opencodePid) ||
+      isProcessRunning(instance.webPid)
+    ) {
       validInstances.push(instance);
     } else {
       console.log(`Removed stale entry: ${instance.name}`);

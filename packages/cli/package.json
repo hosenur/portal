@@ -1,6 +1,6 @@
 {
   "name": "openportal",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "type": "module",
   "repository": {
     "type": "git",
@@ -9,6 +9,10 @@
   "bin": {
     "openportal": "./dist/index.js"
   },
+  "files": [
+    "dist",
+    "web"
+  ],
   "scripts": {
     "dev": "bun run src/index.ts",
     "build": "bun build src/index.ts --outdir dist --target bun",
