@@ -230,14 +230,17 @@ export function FileMentionPopover({
     return (
       <div
         ref={popoverRef}
-        className="absolute bottom-full left-5 right-5 mb-2 z-50 rounded-lg border border-border bg-overlay shadow-lg animate-in fade-in slide-in-from-bottom-1"
+        className="absolute bottom-full left-5 right-5 mb-3 z-50 rounded-xl border border-border/50 bg-background/95 backdrop-blur-xl shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-200"
       >
-        <div className="p-2 text-xs text-muted-fg border-b border-border">
+        <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-muted-fg/80 border-b border-border/40 bg-muted/20 rounded-t-xl">
           {loading ? "Searching..." : `Files matching "${searchQuery}"`}
         </div>
-        <div ref={listRef} className="max-h-48 overflow-y-auto p-1">
+        <div
+          ref={listRef}
+          className="max-h-56 overflow-y-auto p-1.5 scrollbar-hide"
+        >
           {files.length === 0 && !loading && (
-            <div className="px-3 py-2 text-sm text-muted-fg">
+            <div className="px-3 py-4 text-center text-sm text-muted-fg/60">
               No files found
             </div>
           )}
@@ -245,22 +248,38 @@ export function FileMentionPopover({
             <button
               type="button"
               key={file.path}
-              className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors ${
+              className={`flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-sm transition-all duration-150 ${
                 index === selectedIndex
-                  ? "bg-primary text-primary-fg"
-                  : "hover:bg-muted active:bg-muted"
+                  ? "bg-primary/10 text-primary-fg"
+                  : "hover:bg-muted/50 active:bg-muted/70 text-foreground"
               }`}
               onClick={() => onSelect(file.path)}
               onTouchEnd={() => onSelect(file.path)}
             >
-              <DocumentIcon className="size-4 shrink-0" />
-              <div className="flex flex-col overflow-hidden">
-                <span className="font-medium truncate">{file.name}</span>
+              <div
+                className={`flex shrink-0 items-center justify-center rounded-md p-1.5 ${
+                  index === selectedIndex
+                    ? "bg-primary text-primary-fg"
+                    : "bg-muted text-muted-fg"
+                }`}
+              >
+                <DocumentIcon className="size-4" />
+              </div>
+              <div className="flex flex-col min-w-0 flex-1">
                 <span
-                  className={`text-xs truncate ${
+                  className={`font-medium truncate leading-tight ${
+                    index === selectedIndex
+                      ? "text-primary-fg"
+                      : "text-foreground"
+                  }`}
+                >
+                  {file.name}
+                </span>
+                <span
+                  className={`text-[10px] truncate leading-tight ${
                     index === selectedIndex
                       ? "text-primary-fg/70"
-                      : "text-muted-fg"
+                      : "text-muted-fg/70"
                   }`}
                 >
                   {file.path}
@@ -274,7 +293,7 @@ export function FileMentionPopover({
   }
 
   const desktopStyle: React.CSSProperties = {
-    top: (position?.top ?? 0) - 8,
+    top: (position?.top ?? 0) - 10,
     left: Math.min(position?.left ?? 0, window.innerWidth - 320),
     transform: "translateY(-100%)",
   };
@@ -282,36 +301,57 @@ export function FileMentionPopover({
   return (
     <div
       ref={popoverRef}
-      className="fixed z-50 min-w-64 max-w-md rounded-lg border border-border bg-overlay shadow-lg animate-in fade-in slide-in-from-bottom-1"
+      className="fixed z-50 min-w-72 max-w-lg rounded-xl border border-border/50 bg-background/95 backdrop-blur-xl shadow-2xl animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-150 ease-out"
       style={desktopStyle}
     >
-      <div className="p-2 text-xs text-muted-fg border-b border-border">
+      <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-muted-fg/80 border-b border-border/40 bg-muted/20 rounded-t-xl">
         {loading ? "Searching..." : `Files matching "${searchQuery}"`}
       </div>
-      <div ref={listRef} className="max-h-60 overflow-y-auto p-1">
+      <div
+        ref={listRef}
+        className="max-h-[300px] overflow-y-auto p-1.5 scrollbar-thin scrollbar-thumb-border/50 scrollbar-track-transparent"
+      >
         {files.length === 0 && !loading && (
-          <div className="px-3 py-2 text-sm text-muted-fg">No files found</div>
+          <div className="px-3 py-4 text-center text-sm text-muted-fg/60">
+            No files found
+          </div>
         )}
         {files.map((file, index) => (
           <button
             type="button"
             key={file.path}
-            className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors ${
+            className={`flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-sm transition-all duration-150 ${
               index === selectedIndex
-                ? "bg-primary text-primary-fg"
-                : "hover:bg-muted"
+                ? "bg-primary/10 text-primary-fg"
+                : "hover:bg-muted/50 text-foreground"
             }`}
             onClick={() => onSelect(file.path)}
             onMouseEnter={() => onSelectedIndexChange(index)}
           >
-            <DocumentIcon className="size-4 shrink-0" />
-            <div className="flex flex-col overflow-hidden">
-              <span className="font-medium truncate">{file.name}</span>
+            <div
+              className={`flex shrink-0 items-center justify-center rounded-md p-1.5 ${
+                index === selectedIndex
+                  ? "bg-primary text-primary-fg"
+                  : "bg-muted text-muted-fg"
+              }`}
+            >
+              <DocumentIcon className="size-4" />
+            </div>
+            <div className="flex flex-col min-w-0 flex-1">
               <span
-                className={`text-xs truncate ${
+                className={`font-medium truncate leading-tight ${
+                  index === selectedIndex
+                    ? "text-primary-fg"
+                    : "text-foreground"
+                }`}
+              >
+                {file.name}
+              </span>
+              <span
+                className={`text-[10px] truncate leading-tight ${
                   index === selectedIndex
                     ? "text-primary-fg/70"
-                    : "text-muted-fg"
+                    : "text-muted-fg/70"
                 }`}
               >
                 {file.path}
