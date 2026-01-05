@@ -28,21 +28,10 @@ export async function loader({ params }: Route.LoaderArgs) {
 export function meta({ data }: Route.MetaArgs) {
   const title = data?.title || "Documentation";
   const description = data?.description || "OpenCode Portal Documentation";
-  const ogImageUrl = `/api/og?title=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`;
 
   return [
     { title: `${title} - OpenCode Portal` },
     { name: "description", content: description },
-    { property: "og:title", content: `${title} - OpenCode Portal` },
-    { property: "og:description", content: description },
-    { property: "og:type", content: "article" },
-    { property: "og:image", content: ogImageUrl },
-    { property: "og:image:width", content: "1200" },
-    { property: "og:image:height", content: "630" },
-    { name: "twitter:card", content: "summary_large_image" },
-    { name: "twitter:title", content: `${title} - OpenCode Portal` },
-    { name: "twitter:description", content: description },
-    { name: "twitter:image", content: ogImageUrl },
   ];
 }
 

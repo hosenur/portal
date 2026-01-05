@@ -15,7 +15,6 @@
     "@fontsource/geist-sans": "^5.2.5",
     "@react-router/node": "^7.10.1",
     "@react-router/serve": "^7.10.1",
-    "@takumi-rs/image-response": "^0.62.6",
     "fumadocs-core": "16.2.5",
     "fumadocs-mdx": "14.1.1",
     "fumadocs-ui": "16.2.5",

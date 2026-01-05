@@ -6,9 +6,6 @@ import { baseOptions } from "@/lib/layout.shared";
 import { AnimatedHero } from "@/components/animated-hero";
 
 export function meta(_args: Route.MetaArgs) {
-  const ogImageUrl =
-    "/api/og?title=Portal&description=Portal%20is%20a%20comprehensive%20mobile-first%20web%20UI%20for%20OpenCode%2C%20with%20isolated%20workspaces%2C%20quick%20git%20integration%2C%20in%20browser%20terminal%20access.";
-
   return [
     { title: "Portal - Mobile-first Web UI for OpenCode" },
     {
@@ -17,30 +14,6 @@ export function meta(_args: Route.MetaArgs) {
         "Portal is a comprehensive mobile-first web UI for OpenCode, with isolated workspaces, quick git integration, in browser terminal access. (More AI Agents coming soon)",
     },
     { name: "author", content: "Hosenur Rahman" },
-    {
-      property: "og:title",
-      content: "Portal - Mobile-first Web UI for OpenCode",
-    },
-    {
-      property: "og:description",
-      content:
-        "Portal is a comprehensive mobile-first web UI for OpenCode, with isolated workspaces, quick git integration, in browser terminal access. (More AI Agents coming soon)",
-    },
-    { property: "og:type", content: "website" },
-    { property: "og:image", content: ogImageUrl },
-    { property: "og:image:width", content: "1200" },
-    { property: "og:image:height", content: "630" },
-    { name: "twitter:card", content: "summary_large_image" },
-    {
-      name: "twitter:title",
-      content: "Portal - Mobile-first Web UI for OpenCode",
-    },
-    {
-      name: "twitter:description",
-      content:
-        "Portal is a comprehensive mobile-first web UI for OpenCode, with isolated workspaces, quick git integration, in browser terminal access. (More AI Agents coming soon)",
-    },
-    { name: "twitter:image", content: ogImageUrl },
   ];
 }
 
