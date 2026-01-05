@@ -24,24 +24,36 @@ This setup allows you to:
 On your remote server:
 
 1. **OpenCode** installed
-2. **Node.js 18+** installed
+2. **Bun** installed (recommended)
 3. **Tailscale** installed and connected
+
+> **Note**: OpenPortal works best when paired with Bun. Node.js may have some rough edges.
 
 ## Server Setup
 
-### 1. Install OpenCode
+### 1. Install Bun
 
 ```bash
+curl -fsSL https://bun.sh/install | bash
+```
+
+### 2. Install OpenCode
+
+```bash
+# Using curl (macOS/Linux)
 curl -fsSL https://opencode.ai/install | bash
+
+# Or using bun
+bun install -g opencode
 ```
 
-### 2. Install Portal globally
+### 3. Install Portal globally
 
 ```bash
-npm install -g openportal
+bun install -g openportal
 ```
 
-### 3. Install and configure Tailscale
+### 4. Install and configure Tailscale
 
 ```bash
 # Install Tailscale
@@ -51,16 +63,18 @@ curl -fsSL https://tailscale.com/install.sh | sh
 sudo tailscale up
 ```
 
-### 4. Run Portal
+Follow the authentication link that appears to connect your server to your Tailnet.
+
+### 5. Run Portal
 
 Navigate to your project and start Portal:
 
 ```bash
 cd /path/to/your/project
-openportal --no-browser
+openportal
 ```
 
-Note the `--no-browser` flag since there's no GUI on the server.
+Portal will display the URLs where you can access it.
 
 ## Client Access
 
@@ -72,19 +86,55 @@ Download Tailscale for your device:
 - [Android](https://play.google.com/store/apps/details?id=com.tailscale.ipn)
 - [macOS/Windows/Linux](https://tailscale.com/download)
 
-### 2. Connect to your server
+### 2. Connect to your Tailnet
 
-Once connected to Tailscale, access Portal at:
+Open Tailscale and sign in with the same account you used on your server.
 
-```
-http://[your-server-tailscale-ip]:3000
-```
+### 3. Access Portal
 
-Find your server's Tailscale IP with:
+Once connected, you can access Portal using any of these methods:
+
+#### Using Tailscale IP
+
+Find your server's Tailscale IP:
 
 ```bash
 tailscale ip -4
 ```
+
+Then access Portal at:
+
+```
+http://100.x.x.x:3000
+```
+
+#### Using MagicDNS (Recommended)
+
+Tailscale's MagicDNS lets you access devices by hostname. If your server is named `myserver`, access Portal at:
+
+```
+http://myserver:3000
+```
+
+To check or set your machine name:
+
+```bash
+# Check current hostname
+tailscale status
+
+# Set a custom hostname
+sudo tailscale set --hostname=myserver
+```
+
+#### Using Tailnet Domain
+
+For a fully qualified domain name, use your Tailnet name:
+
+```
+http://myserver.tailnet-name.ts.net:3000
+```
+
+Find your Tailnet name in the [Tailscale admin console](https://login.tailscale.com/admin/dns) under DNS settings.
 
 ## Running as a Service
 
@@ -92,11 +142,11 @@ To keep Portal running after you disconnect, use a process manager like PM2:
 
 ```bash
 # Install PM2
-npm install -g pm2
+bun install -g pm2
 
 # Start Portal with PM2
 cd /path/to/your/project
-pm2 start openportal --name portal -- --no-browser
+pm2 start openportal --name portal
 
 # Save the process list
 pm2 save
@@ -121,9 +171,32 @@ pm2 restart portal
 pm2 stop portal
 ```
 
+## Managing Multiple Projects
+
+Portal supports multiple instances. Use the `--name` flag to identify each:
+
+```bash
+# Start Portal for different projects
+cd /project-a && openportal --name project-a --port 3001
+cd /project-b && openportal --name project-b --port 3002
+
+# List all running instances
+openportal list
+
+# Stop a specific instance
+openportal stop --name project-a
+```
+
+Access each project via MagicDNS:
+
+```
+http://myserver:3001  # project-a
+http://myserver:3002  # project-b
+```
+
 ## Security Considerations
 
 - Tailscale provides end-to-end encryption
 - Portal is only accessible via your Tailscale network
 - No ports need to be exposed to the public internet
-- Consider using Tailscale ACLs for additional access control
+- Consider using [Tailscale ACLs](https://tailscale.com/kb/1018/acls) for additional access control

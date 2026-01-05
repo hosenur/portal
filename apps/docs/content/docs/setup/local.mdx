@@ -15,12 +15,14 @@ You need OpenCode installed on your system. Install it using one of these method
 # Using curl (macOS/Linux)
 curl -fsSL https://opencode.ai/install | bash
 
-# Using npm
-npm install -g opencode
+# Using bun
+bun install -g opencode
 
 # Using Homebrew (macOS)
 brew install sst/tap/opencode
 ```
+
+> **Note**: OpenPortal works best when paired with Bun. Node.js may have some rough edges.
 
 ## Quick Start
 
@@ -30,22 +32,23 @@ The fastest way to get started:
 # Navigate to your project directory
 cd /path/to/your/project
 
-# Run Portal with npx
-npx openportal
+# Run Portal with bunx
+bunx openportal
 ```
 
-Portal will:
+Portal will automatically:
 
-- Start the OpenCode server on port 4000
-- Start the web UI on port 3000
-- Open your browser automatically
+- Find available ports (defaults: 3000 for Web UI, 4000 for OpenCode)
+- Start the OpenCode server
+- Start the Web UI
+- Display the access URLs
 
 ## Global Installation
 
 For frequent use, install Portal globally:
 
 ```bash
-npm install -g openportal
+bun install -g openportal
 ```
 
 Then run it from any project directory:
@@ -55,19 +58,65 @@ cd /path/to/your/project
 openportal
 ```
 
-## CLI Options
+## Commands
 
-Customize Portal's behavior with these options:
+### Default Command
+
+Start both OpenCode server and Web UI:
 
 ```bash
-openportal [options]
+openportal                    # Start in current directory
+openportal .                  # Same as above
+openportal /path/to/project   # Start in specific directory
+```
+
+### Run Command
+
+Start only the OpenCode server (no Web UI):
+
+```bash
+openportal run                        # Current directory
+openportal run -d ./my-project        # Specific directory
+```
+
+### Stop Command
+
+Stop running instances:
+
+```bash
+openportal stop               # Stop instance for current directory
+openportal stop --name myapp  # Stop instance by name
+```
+
+### List Command
+
+List all running instances:
+
+```bash
+openportal list
+openportal ls                 # Shorthand
+```
+
+### Clean Command
+
+Remove stale entries from the config:
+
+```bash
+openportal clean
+```
+
+## CLI Options
+
+```bash
+openportal [command] [options]
 
 Options:
-  -p, --port <port>       Port for web UI (default: 3000)
-  --opencode-port <port>  Port for OpenCode server (default: 4000)
-  -d, --directory <path>  Working directory for OpenCode
-  --no-browser            Don't open browser automatically
-  --skip-opencode-check   Skip OpenCode installation check
+  -h, --help              Show help message
+  -d, --directory <path>  Working directory (default: current directory)
+  -p, --port <port>       Web UI port (default: 3000, auto-finds if busy)
+  --opencode-port <port>  OpenCode server port (default: 4000, auto-finds if busy)
+  --hostname <host>       Hostname to bind (default: 0.0.0.0)
+  --name <name>           Instance name (default: directory name)
 ```
 
 ### Examples
@@ -76,8 +125,14 @@ Options:
 # Use custom ports
 openportal --port 8080 --opencode-port 5000
 
-# Don't open browser
-openportal --no-browser
+# Bind to specific hostname
+openportal --hostname 127.0.0.1
+
+# Give the instance a custom name
+openportal --name my-project
+
+# Start OpenCode only with custom port
+openportal run --opencode-port 5000
 
 # Specify a different project directory
 openportal -d /path/to/other/project
@@ -87,7 +142,7 @@ openportal -d /path/to/other/project
 
 ### OpenCode not found
 
-If you see "OpenCode is not installed", install it first:
+If you see an error about OpenCode, install it first:
 
 ```bash
 curl -fsSL https://opencode.ai/install | bash
@@ -95,8 +150,12 @@ curl -fsSL https://opencode.ai/install | bash
 
 ### Port already in use
 
-If port 3000 or 4000 is in use, specify different ports:
+Portal automatically finds available ports. If you want specific ports and they're in use, specify different ones:
 
 ```bash
 openportal --port 3001 --opencode-port 4001
 ```
+
+### Instance already running
+
+If Portal detects an existing instance for the directory, it will show the existing instance info instead of starting a new one. Use `openportal stop` first if you want to restart.

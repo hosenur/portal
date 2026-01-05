@@ -1,6 +1,7 @@
 # OpenCode Portal
 
-![banner](/banner.png)
+[![npm version](https://img.shields.io/npm/v/openportal.svg)](https://www.npmjs.com/package/openportal)
+[![Discord](https://img.shields.io/discord/1234567890?color=7289da&label=Discord&logo=discord&logoColor=white)](https://discord.gg/7UJ5KYfhNE)
 
 > **Disclaimer**: This is a **personal project** and is **not related** to [https://github.com/sst/opencode](https://github.com/sst/opencode) or the SST team. This portal is a personal-built interface for interacting with OpenCode instances.
 
@@ -68,6 +69,9 @@ Options:
 OpenCode must be installed on your system. Install it using one of these methods:
 
 ```bash
+# Using curl (macOS/Linux)
+curl -fsSL https://opencode.ai/install | bash
+
 # Using bun
 bun install -g opencode
 
@@ -110,62 +114,15 @@ This portal is designed for remote access to your OpenCode instance. Deploy the 
 [Your Phone] ---(Tailscale)---> [VPS running Portal + OpenCode]
 ```
 
-## Tech Stack
+## Documentation
 
-- [React Router](https://reactrouter.com) - React framework
-- [IntentUI](https://intentui.com/) - UI library
-- [Tailwind CSS](https://tailwindcss.com) - Styling
-- [Nitro](https://nitro.build) - Server
-- [OpenCode SDK](https://www.npmjs.com/package/@opencode-ai/sdk) - OpenCode API client
+For full documentation, visit [openportal.space/docs](https://openportal.space/docs)
 
-## Contributing
-
-Contributions are welcome! Here's how you can help:
-
-### Reporting Issues
-
-- **Bugs**: Report bugs by opening an issue with a clear description and steps to reproduce
-- **Feature requests**: Open an issue with the `feature` label and describe the proposed enhancement
-
-### Development Setup
-
-1. Fork the repository
-2. Clone your fork:
-   ```bash
-   git clone https://github.com/YOUR_USERNAME/portal.git
-   cd portal
-   ```
-3. Install dependencies:
-   ```bash
-   bun install
-   ```
-4. Run the development server:
-   ```bash
-   bun dev
-   ```
-
-### Pull Request Process
-
-1. Create a feature branch from `main`
-2. Make your changes following the existing code style
-3. Test your changes thoroughly
-4. Update documentation if needed
-5. Submit a pull request with a clear description
-
-### Code Style
-
-- Use TypeScript for all new code
-- Follow the existing component patterns in `apps/web/src/components/`
-- Use Tailwind CSS for styling
-- Maintain consistent naming conventions
-- Add proper TypeScript types
-
-### Getting Help
+## Getting Help
 
 - Join our [Discord community](https://discord.gg/7UJ5KYfhNE)
 - Check existing [issues](https://github.com/hosenur/portal/issues) before creating new ones
-- Join the discussion in existing issues
-- Be respectful and constructive in all interactions
+- Report bugs or request features on [GitHub](https://github.com/hosenur/portal)
 
 ## License
 

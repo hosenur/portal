@@ -16,8 +16,8 @@ export function baseOptions(): BaseLayoutProps {
         url: "/docs",
       },
       {
-        text: "Releases",
-        url: "/releases",
+        text: "Discord",
+        url: "https://discord.gg/7UJ5KYfhNE",
       },
     ],
   };

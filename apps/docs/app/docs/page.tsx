@@ -54,7 +54,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const { pageTree } = useFumadocsLoader(loaderData);
 
   return (
-    <DocsLayout {...baseOptions()} tree={pageTree}>
+    <DocsLayout {...baseOptions()} tree={pageTree} links={[]}>
       <Content />
     </DocsLayout>
   );

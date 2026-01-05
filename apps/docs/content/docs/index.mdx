@@ -16,7 +16,7 @@ Portal is distributed as an npm package (`openportal`) that:
 
 1. **Starts OpenCode Server**: Automatically launches the OpenCode server in your project directory
 2. **Serves the Web UI**: Provides a beautiful, responsive web interface
-3. **Opens Your Browser**: Automatically opens the Portal in your default browser
+3. **Manages Instances**: Track and control multiple Portal instances across projects
 
 The entire setup takes just one command - no configuration needed.
 
@@ -27,10 +27,12 @@ The entire setup takes just one command - no configuration needed.
 cd /path/to/your/project
 
 # Run Portal
-npx openportal
+bunx openportal
 ```
 
-That's it! Portal will start on `http://localhost:3000`.
+> **Note**: OpenPortal works best when paired with Bun. Node.js may have some rough edges.
+
+That's it! Portal will automatically find available ports and display the URLs.
 
 ## Setup Options
 
