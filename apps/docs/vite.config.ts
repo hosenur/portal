@@ -14,4 +14,7 @@ export default defineConfig({
       root: __dirname,
     }),
   ],
+  ssr: {
+    external: ["@takumi-rs/image-response"],
+  },
 });

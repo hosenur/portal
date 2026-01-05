@@ -28,7 +28,7 @@ export async function loader({ params }: Route.LoaderArgs) {
 export function meta({ data }: Route.MetaArgs) {
   const title = data?.title || "Documentation";
   const description = data?.description || "OpenCode Portal Documentation";
-  const ogImageUrl = `https://api.hosenur.workers.dev/openportal/og?title=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`;
+  const ogImageUrl = `/api/og?title=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`;
 
   return [
     { title: `${title} - OpenCode Portal` },
