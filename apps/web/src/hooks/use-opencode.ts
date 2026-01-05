@@ -107,3 +107,12 @@ export function useDeleteSession() {
     return res.json();
   };
 }
+
+export function useGitDiff() {
+  const port = usePort();
+
+  return useSWR<{ diff: string; worktree: string }>(
+    port ? `/api/opencode/${port}/git/diff` : null,
+    fetcher,
+  );
+}
