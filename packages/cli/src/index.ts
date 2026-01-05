@@ -3,17 +3,12 @@
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { getPort } from "get-port-please";
 import { homedir } from "os";
-import { join, resolve, dirname } from "path";
-import { fileURLToPath } from "url";
+import { join, resolve } from "path";
 
-const PKG_NAME = "openportal";
 const CONFIG_PATH = join(homedir(), ".portal.json");
 const DEFAULT_HOSTNAME = "0.0.0.0";
 const DEFAULT_PORT = 3000;
 const DEFAULT_OPENCODE_PORT = 4000;
-const UPDATE_CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 interface PortalInstance {
   id: string;
@@ -28,7 +23,6 @@ interface PortalInstance {
 
 interface PortalConfig {
   instances: PortalInstance[];
-  lastUpdateCheck?: number;
 }
 
 function readConfig(): PortalConfig {
@@ -57,57 +51,6 @@ function isProcessRunning(pid: number): boolean {
   }
 }
 
-async function getLatestVersion(): Promise<string | null> {
-  try {
-    const response = await fetch(
-      `https://registry.npmjs.org/${PKG_NAME}/latest`,
-    );
-    if (!response.ok) return null;
-    const data = await response.json();
-    return data.version || null;
-  } catch {
-    return null;
-  }
-}
-
-function compareVersions(current: string, latest: string): -1 | 0 | 1 {
-  const currentParts = current.split(".").map(Number);
-  const latestParts = latest.split(".").map(Number);
-
-  for (let i = 0; i < Math.max(currentParts.length, latestParts.length); i++) {
-    const currentNum = currentParts[i] || 0;
-    const latestNum = latestParts[i] || 0;
-    if (latestNum > currentNum) return 1;
-    if (currentNum > latestNum) return -1;
-  }
-  return 0;
-}
-
-async function checkForUpdates(currentVersion: string): Promise<void> {
-  const config = readConfig();
-  const now = Date.now();
-
-  if (
-    config.lastUpdateCheck &&
-    now - config.lastUpdateCheck < UPDATE_CHECK_INTERVAL
-  ) {
-    return;
-  }
-
-  const latestVersion = await getLatestVersion();
-  if (!latestVersion) return;
-
-  config.lastUpdateCheck = now;
-  writeConfig(config);
-
-  if (compareVersions(currentVersion, latestVersion) === -1) {
-    console.log(
-      `\n⚠️  A new version of OpenPortal is available: v${latestVersion} (current: v${currentVersion})`,
-    );
-    console.log(`   Run \`npm install -g ${PKG_NAME}\` to update.`);
-  }
-}
-
 function printHelp() {
   console.log(`
 OpenPortal CLI - Run OpenCode with a web UI
@@ -116,7 +59,6 @@ Usage: openportal [options] [command]
 
 Options:
   -h, --help     Show this help message
-  -v, --version  Show version
 
 Commands:
   run [options]   Start OpenCode and the web UI
@@ -330,34 +272,10 @@ async function main() {
     return;
   }
 
-  if (flags.version || flags.v) {
-    try {
-      const pkg = JSON.parse(
-        readFileSync(
-          join(import.meta.url.replace("file://", ""), "..", "package.json"),
-          "utf-8",
-        ),
-      );
-      console.log(`OpenPortal v${pkg.version}`);
-      await checkForUpdates(pkg.version);
-    } catch {
-      console.log("OpenPortal CLI");
-    }
-    return;
-  }
-
   switch (command) {
-    case "run": {
-      const pkg = JSON.parse(
-        readFileSync(
-          join(import.meta.url.replace("file://", ""), "..", "package.json"),
-          "utf-8",
-        ),
-      );
-      await checkForUpdates(pkg.version);
+    case "run":
       await cmdRun(flags);
       break;
-    }
     case "stop":
       cmdStop(flags);
       break;
