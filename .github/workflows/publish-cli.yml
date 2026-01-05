@@ -54,18 +54,18 @@ jobs:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
 
+      - name: Install dependencies
+        if: steps.version-check.outputs.changed == 'true'
+        run: bun install
+
       - name: Build Web App
         if: steps.version-check.outputs.changed == 'true'
         run: bun run build
         working-directory: apps/web
 
-      - name: Install dependencies
-        if: steps.version-check.outputs.changed == 'true'
-        run: npm ci
-
       - name: Build CLI
         if: steps.version-check.outputs.changed == 'true'
-        run: npm run build
+        run: bun run build
         working-directory: packages/cli
 
       - name: Publish to npm
