@@ -9,6 +9,10 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader } from "@/components/ui/loader";
 import { ModelSelect } from "@/components/model-select";
+import {
+  FileMentionPopover,
+  useFileMention,
+} from "@/components/file-mention-popover";
 import IconBadgeSparkle from "@/components/icons/badge-sparkle-icon";
 import IconUser from "@/components/icons/user-icon";
 import IconMagnifier from "@/components/icons/magnifier-icon";
@@ -225,12 +229,14 @@ function SessionPage() {
   const [sending, setSending] = useState(false);
   const [messageQueue, setMessageQueue] = useState<QueuedMessage[]>([]);
   const [hasScrolledInitially, setHasScrolledInitially] = useState(false);
+  const [fileResults, setFileResults] = useState<string[]>([]);
   const isProcessingQueue = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isNearBottomRef = useRef(true);
   const prevMessagesLengthRef = useRef(0);
+  const fileMention = useFileMention();
 
   const error = messagesError?.message || sendError;
 
@@ -438,13 +444,66 @@ function SessionPage() {
         )}
       </div>
 
-      <div className="border-t border-border p-4 shrink-0">
+      <div className="border-t border-border p-4 shrink-0 relative">
+        <FileMentionPopover
+          isOpen={fileMention.isOpen}
+          searchQuery={fileMention.searchQuery}
+          textareaRef={textareaRef}
+          mentionStart={fileMention.mentionStart}
+          selectedIndex={fileMention.selectedIndex}
+          onSelectedIndexChange={fileMention.setSelectedIndex}
+          onFilesChange={setFileResults}
+          onClose={fileMention.close}
+          onSelect={(filePath) => {
+            const newValue = fileMention.handleSelect(filePath, input);
+            setInput(newValue);
+          }}
+        />
         <form onSubmit={handleSubmit} className="w-full">
           <Textarea
             ref={textareaRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              const value = e.target.value;
+              setInput(value);
+              if (fileMention.isOpen || value.includes("@")) {
+                const cursorPos = e.target.selectionStart ?? value.length;
+                fileMention.handleInputChange(value, cursorPos);
+              }
+            }}
+            onInput={(e) => {
+              const target = e.target as HTMLTextAreaElement;
+              const value = target.value;
+              if (value.includes("@")) {
+                const cursorPos = target.selectionStart ?? value.length;
+                fileMention.handleInputChange(value, cursorPos);
+              }
+            }}
+            onSelect={(e) => {
+              const target = e.target as HTMLTextAreaElement;
+              if (fileMention.isOpen || input.includes("@")) {
+                const cursorPos = target.selectionStart ?? input.length;
+                fileMention.handleInputChange(input, cursorPos);
+              }
+            }}
             onKeyDown={(e) => {
+              const handled = fileMention.handleKeyDown(e, fileResults.length);
+              if (handled) {
+                if (
+                  (e.key === "Enter" || e.key === "Tab") &&
+                  fileResults.length > 0
+                ) {
+                  const selectedFile = fileResults[fileMention.selectedIndex];
+                  if (selectedFile) {
+                    const newValue = fileMention.handleSelect(
+                      selectedFile,
+                      input,
+                    );
+                    setInput(newValue);
+                  }
+                }
+                return;
+              }
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 if (input.trim()) {
@@ -452,7 +511,7 @@ function SessionPage() {
                 }
               }
             }}
-            placeholder="Type your message..."
+            placeholder="Type your message... (use @ to mention files)"
             className="w-full resize-none min-h-32 max-h-32 overflow-y-auto"
             rows={5}
           />
