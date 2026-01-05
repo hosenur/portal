@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { useAccentStore, type AccentColor } from "@/stores/accent-store";
+import { useFontStore, type FontFamily } from "@/stores/font-store";
 
 type Theme = "light" | "dark" | "system";
 
@@ -15,6 +16,8 @@ interface ThemeContextType {
   resolvedTheme: "light" | "dark";
   accentColor: AccentColor;
   setAccentColor: (color: AccentColor) => void;
+  fontFamily: FontFamily;
+  setFontFamily: (font: FontFamily) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -45,6 +48,10 @@ function applyAccentColor(accentColor: AccentColor) {
   document.documentElement.setAttribute("data-accent", accentColor);
 }
 
+function applyFontFamily(fontFamily: FontFamily) {
+  document.documentElement.setAttribute("data-font", fontFamily);
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
     if (typeof window === "undefined") return "system";
@@ -58,6 +65,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const accentColor = useAccentStore((state) => state.accentColor);
   const setAccentColor = useAccentStore((state) => state.setAccentColor);
+
+  const fontFamily = useFontStore((state) => state.fontFamily);
+  const setFontFamily = useFontStore((state) => state.setFontFamily);
 
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);
@@ -76,6 +86,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [accentColor]);
 
   useEffect(() => {
+    applyFontFamily(fontFamily);
+  }, [fontFamily]);
+
+  useEffect(() => {
     if (theme !== "system") return;
 
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
@@ -90,7 +104,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   return (
     <ThemeContext.Provider
-      value={{ theme, setTheme, resolvedTheme, accentColor, setAccentColor }}
+      value={{
+        theme,
+        setTheme,
+        resolvedTheme,
+        accentColor,
+        setAccentColor,
+        fontFamily,
+        setFontFamily,
+      }}
     >
       {children}
     </ThemeContext.Provider>
