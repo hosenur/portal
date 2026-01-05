@@ -1,5 +1,5 @@
 import type { Config } from "@react-router/dev/config";
-import { vercelPreset } from "@vercel/react-router/dev";
+import { vercelPreset } from "@vercel/react-router/vite";
 import { glob } from "node:fs/promises";
 import { createGetUrl, getSlugs } from "fumadocs-core/source";
 
