@@ -21,7 +21,8 @@ interface InstanceData {
   directory: string;
   port: number;
   hostname: string;
-  pid: number;
+  opencodePid: number;
+  webPid: number;
   startedAt: string;
   state: "running";
   status: string;

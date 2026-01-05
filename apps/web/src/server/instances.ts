@@ -10,8 +10,10 @@ interface PortalInstance {
   name: string;
   directory: string;
   port: number;
+  opencodePort: number;
   hostname: string;
-  pid: number;
+  opencodePid: number;
+  webPid: number;
   startedAt: string;
 }
 
@@ -42,14 +44,19 @@ export default defineHandler(async () => {
   const config = readConfig();
 
   const instances = config.instances
-    .filter((instance) => isProcessRunning(instance.pid))
+    .filter(
+      (instance) =>
+        isProcessRunning(instance.opencodePid) ||
+        isProcessRunning(instance.webPid),
+    )
     .map((instance) => ({
       id: instance.id,
       name: instance.name,
       directory: instance.directory,
-      port: instance.port,
+      port: instance.opencodePort,
       hostname: instance.hostname,
-      pid: instance.pid,
+      opencodePid: instance.opencodePid,
+      webPid: instance.webPid,
       startedAt: instance.startedAt,
       state: "running" as const,
       status: `Running since ${new Date(instance.startedAt).toLocaleString()}`,
