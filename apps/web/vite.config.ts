@@ -13,7 +13,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
     nitro({
-      preset: "standalone",
+      preset: "bun",
     }),
   ],
   resolve: {
