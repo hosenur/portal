@@ -5,5 +5,4 @@ export default [
   route("releases", "routes/releases.tsx"),
   route("docs/*", "docs/page.tsx"),
   route("api/search", "docs/search.ts"),
-  route("api/og", "api/og.tsx"),
 ] satisfies RouteConfig;
