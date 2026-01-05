@@ -7,7 +7,7 @@ import { AnimatedHero } from "@/components/animated-hero";
 
 export function meta(_args: Route.MetaArgs) {
   const ogImageUrl =
-    "https://api.hosenur.workers.dev/openportal/og?title=Portal&description=Portal%20is%20a%20comprehensive%20mobile-first%20web%20UI%20for%20OpenCode%2C%20with%20isolated%20workspaces%2C%20quick%20git%20integration%2C%20in%20browser%20terminal%20access.%20(More%20AI%20Agents%20coming%20soon)";
+    "/api/og?title=Portal&description=Portal%20is%20a%20comprehensive%20mobile-first%20web%20UI%20for%20OpenCode%2C%20with%20isolated%20workspaces%2C%20quick%20git%20integration%2C%20in%20browser%20terminal%20access.";
 
   return [
     { title: "Portal - Mobile-first Web UI for OpenCode" },
@@ -101,8 +101,7 @@ function CopyButton({ text }: { text: string }) {
 }
 
 export default function Home() {
-  const installCommand =
-    "curl -fsSL https://openportal.space/install.sh | bash";
+  const installCommand = "bunx openportal";
 
   return (
     <HomeLayout {...baseOptions()}>
