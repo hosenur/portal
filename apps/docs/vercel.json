@@ -1,4 +1,0 @@
-{
-  "buildCommand": "bun run build",
-  "outputDirectory": "build/client"
-}
