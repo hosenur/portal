@@ -1,10 +1,10 @@
 import { useTheme } from "@/providers/theme-provider";
 import { type AccentColor } from "@/stores/accent-store";
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
 } from "@/components/ui/select";
 
@@ -20,11 +20,13 @@ const ACCENT_COLORS: { id: AccentColor; name: string; color: string }[] = [
   { id: "emerald", name: "Emerald", color: "oklch(0.596 0.145 163.225)" },
 ];
 
-function ColorSwatch({ color }: { color: string }) {
+function ColorSwatch({ color, slot }: { color: string; slot?: boolean }) {
   return (
     <span
-      className="inline-block h-4 w-4 rounded-full border border-border"
+      data-slot={slot ? "icon" : undefined}
+      className="inline-block size-4 rounded-sm inset-ring inset-ring-fg/15 dark:inset-ring-fg/5"
       style={{ backgroundColor: color }}
+      aria-hidden
     />
   );
 }
@@ -39,7 +41,10 @@ export function AccentSelector() {
       value={accentColor}
       onChange={(color) => color && setAccentColor(color as AccentColor)}
     >
-      <SelectTrigger className="w-36" aria-label="Select accent color">
+      <SelectTrigger
+        className="max-w-sm capitalize"
+        aria-label="Select accent color"
+      >
         <span className="flex items-center gap-2">
           {currentAccent && <ColorSwatch color={currentAccent.color} />}
           <span className="truncate">{currentAccent?.name}</span>
@@ -47,37 +52,12 @@ export function AccentSelector() {
       </SelectTrigger>
       <SelectContent items={ACCENT_COLORS}>
         {(item) => (
-          <SelectItem id={item.id} textValue={item.name}>
-            <span className="flex items-center gap-2">
-              <ColorSwatch color={item.color} />
-              {item.name}
-            </span>
+          <SelectItem id={item.id} textValue={item.name} className="capitalize">
+            <ColorSwatch color={item.color} slot />
+            <SelectLabel>{item.name}</SelectLabel>
           </SelectItem>
         )}
       </SelectContent>
     </Select>
-  );
-}
-
-export function AccentSelectorSimple() {
-  const { accentColor, setAccentColor } = useTheme();
-
-  const accent = ACCENT_COLORS.find((c) => c.id === accentColor);
-
-  return (
-    <Button
-      intent="plain"
-      size="sq-sm"
-      onPress={() => {
-        const currentIndex = ACCENT_COLORS.findIndex(
-          (c) => c.id === accentColor,
-        );
-        const nextIndex = (currentIndex + 1) % ACCENT_COLORS.length;
-        setAccentColor(ACCENT_COLORS[nextIndex]!.id);
-      }}
-      aria-label={`Current accent: ${accent?.name}. Click to cycle through accent colors.`}
-    >
-      {accent && <ColorSwatch color={accent.color} />}
-    </Button>
   );
 }

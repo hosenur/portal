@@ -2,6 +2,10 @@
 @plugin "@tailwindcss/typography";
 @plugin "tailwindcss-react-aria-components";
 
+@import "@fontsource-variable/inter";
+@import "@fontsource/geist-sans";
+@import "@fontsource-variable/geist-mono";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -1292,7 +1296,59 @@
 body {
   background: var(--bg);
   color: var(--fg);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans, "Inter Variable", sans-serif);
+}
+
+:root[data-font="inter"] {
+  --font-sans: "Inter Variable", sans-serif;
+  --font-mono: "Geist Mono Variable", monospace;
+}
+
+:root[data-font="geist-sans"] {
+  --font-sans: "Geist Sans", sans-serif;
+  --font-mono: "Geist Mono Variable", monospace;
+}
+
+:root[data-font="geist-mono"] {
+  --font-sans: "Geist Mono Variable", monospace;
+  --font-mono: "Geist Mono Variable", monospace;
+}
+
+:root[data-font="system"] {
+  --font-sans:
+    ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+    "Segoe UI Symbol", "Noto Color Emoji";
+  --font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+}
+
+:root:not([data-font]) {
+  --font-sans: "Inter Variable", sans-serif;
+  --font-mono: "Geist Mono Variable", monospace;
+}
+
+:root[data-font="geist"] {
+  --font-sans: "Geist Sans", sans-serif;
+  --font-mono: "Geist Mono Variable", monospace;
+}
+
+:root[data-font="system"] {
+  --font-sans:
+    ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+    "Segoe UI Symbol", "Noto Color Emoji";
+  --font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+}
+
+:root:not([data-font]) {
+  --font-sans: "Inter Variable", sans-serif;
+  --font-mono: "Geist Mono Variable", monospace;
+}
+
+.font-mono {
+  font-family: var(--font-mono, "Geist Mono Variable", monospace);
 }
 
 @layer base {
@@ -1386,4 +1442,66 @@ body {
     min-width: 44px;
     z-index: 9999;
   }
+}
+
+/* react-diff-view theme overrides */
+.diff-line {
+  font-family: var(--font-mono, "Geist Mono Variable", monospace);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.diff-gutter {
+  width: 3rem;
+  min-width: 3rem;
+  padding: 0 0.5rem;
+  text-align: right;
+  color: var(--muted-fg);
+  user-select: none;
+}
+
+.diff-code {
+  padding: 0 0.75rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.diff-gutter-insert {
+  background-color: oklch(0.596 0.145 163.225 / 0.15);
+}
+
+.diff-code-insert {
+  background-color: oklch(0.596 0.145 163.225 / 0.1);
+}
+
+.diff-gutter-delete {
+  background-color: oklch(0.577 0.245 27.325 / 0.15);
+}
+
+.diff-code-delete {
+  background-color: oklch(0.577 0.245 27.325 / 0.1);
+}
+
+.diff-hunk-header {
+  background-color: var(--muted);
+  color: var(--muted-fg);
+  padding: 0.25rem 0.75rem;
+  font-family: var(--font-mono, "Geist Mono Variable", monospace);
+  font-size: 0.75rem;
+}
+
+.dark .diff-gutter-insert {
+  background-color: oklch(0.596 0.145 163.225 / 0.2);
+}
+
+.dark .diff-code-insert {
+  background-color: oklch(0.596 0.145 163.225 / 0.1);
+}
+
+.dark .diff-gutter-delete {
+  background-color: oklch(0.577 0.245 27.325 / 0.2);
+}
+
+.dark .diff-code-delete {
+  background-color: oklch(0.577 0.245 27.325 / 0.1);
 }
