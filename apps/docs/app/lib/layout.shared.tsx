@@ -1,5 +1,4 @@
 import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
-import { BookIcon } from "lucide-react";
 
 export function baseOptions(): BaseLayoutProps {
   return {
@@ -11,6 +10,15 @@ export function baseOptions(): BaseLayoutProps {
         </div>
       ),
     },
-
+    links: [
+      {
+        text: "Docs",
+        url: "/docs",
+      },
+      {
+        text: "Releases",
+        url: "/releases",
+      },
+    ],
   };
 }
