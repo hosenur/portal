@@ -12,7 +12,6 @@ import { useModelStore } from "@/stores/model-store";
 import { useBreadcrumb } from "@/contexts/breadcrumb-context";
 import { mutateSessionMessages } from "@/hooks/use-session-messages";
 import { useSessions } from "@/hooks/use-opencode";
-import posthog from "posthog-js";
 
 const CREATE_PR_PROMPT = `Use gh CLI to create a pull request. Follow these steps:
 
@@ -104,7 +103,6 @@ export function AppSidebarNav() {
     setIsCreatingPR(true);
     try {
       await sendPrompt(CREATE_PR_PROMPT);
-      posthog.capture("git_create_pr");
       toast.success("PR creation request sent");
     } catch (err) {
       console.error("Failed to create PR:", err);
@@ -118,7 +116,6 @@ export function AppSidebarNav() {
     setIsPulling(true);
     try {
       await sendPrompt(PULL_CHANGES_PROMPT);
-      posthog.capture("git_pull");
       toast.success("Pull request sent");
     } catch (err) {
       console.error("Failed to pull:", err);
@@ -132,7 +129,6 @@ export function AppSidebarNav() {
     setIsPushing(true);
     try {
       await sendPrompt(PUSH_CHANGES_PROMPT);
-      posthog.capture("git_push");
       toast.success("Push request sent");
     } catch (err) {
       console.error("Failed to push:", err);

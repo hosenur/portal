@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo } from "react";
-import { parseDiff, Diff, Hunk } from "react-diff-view";
-import "react-diff-view/style/index.css";
+import { FileDiff } from "@pierre/diffs/react";
+import { parsePatchFiles } from "@pierre/diffs";
 import { Loader } from "@/components/ui/loader";
 import { Button } from "@/components/ui/button";
 import { useGitDiff } from "@/hooks/use-opencode";
@@ -24,7 +24,9 @@ function DiffPage() {
   const files = useMemo(() => {
     if (!data?.diff) return [];
     try {
-      return parseDiff(data.diff);
+      const patches = parsePatchFiles(data.diff);
+      // Flatten all files from all patches
+      return patches.flatMap((patch) => patch.files);
     } catch {
       return [];
     }
@@ -73,30 +75,15 @@ function DiffPage() {
       </div>
 
       <div className="flex-1 overflow-auto">
-        {files.map((file) => (
-          <div
-            key={file.oldPath + file.newPath}
-            className="border-b border-border"
-          >
-            <div className="sticky top-0 z-10 bg-muted/50 px-4 py-2 font-mono text-sm backdrop-blur">
-              {file.type === "delete" ? (
-                <span className="text-danger">{file.oldPath}</span>
-              ) : file.type === "add" ? (
-                <span className="text-success">{file.newPath}</span>
-              ) : file.oldPath === file.newPath ? (
-                <span>{file.newPath}</span>
-              ) : (
-                <span>
-                  {file.oldPath} → {file.newPath}
-                </span>
-              )}
-            </div>
-            <Diff viewType="unified" diffType={file.type} hunks={file.hunks}>
-              {(hunks) =>
-                hunks.map((hunk) => <Hunk key={hunk.content} hunk={hunk} />)
-              }
-            </Diff>
-          </div>
+        {files.map((file, index) => (
+          <FileDiff
+            key={file.name || file.prevName || index}
+            fileDiff={file}
+            options={{
+              diffStyle: "unified",
+              diffIndicators: "bars",
+            }}
+          />
         ))}
       </div>
     </div>
