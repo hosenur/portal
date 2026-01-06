@@ -5,7 +5,13 @@ import { getPort } from "get-port-please";
 import { homedir } from "os";
 import { join, resolve, dirname } from "path";
 import { fileURLToPath } from "url";
-import Docker from "dockerode";
+import {
+  getDockerClient,
+  isContainerRunning,
+  stopAndRemoveContainer,
+  ensureImageExists,
+  validateMountPath,
+} from "./docker";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -14,11 +20,10 @@ const CONFIG_PATH = join(homedir(), ".portal.json");
 const DEFAULT_HOSTNAME = "0.0.0.0";
 const DEFAULT_PORT = 3000;
 const DEFAULT_OPENCODE_PORT = 4000;
-const OPENCODE_DOCKER_IMAGE = "ghcr.io/anomalyco/opencode:1.1.3";
+const OPENCODE_DOCKER_IMAGE =
+  process.env.OPENCODE_DOCKER_IMAGE || "ghcr.io/anomalyco/opencode:1.1.3";
 
 const WEB_SERVER_PATH = join(__dirname, "..", "web", "server", "index.mjs");
-
-const docker = new Docker({ socketPath: "/var/run/docker.sock" });
 
 type InstanceType = "process" | "docker";
 
@@ -53,7 +58,12 @@ function readConfig(): PortalConfig {
       }));
       return config;
     }
-  } catch {}
+  } catch (error) {
+    console.warn(
+      `[config] Failed to read config file, using empty config:`,
+      error instanceof Error ? error.message : error,
+    );
+  }
   return { instances: [] };
 }
 
@@ -70,19 +80,6 @@ function isProcessRunning(pid: number | null): boolean {
   try {
     process.kill(pid, 0);
     return true;
-  } catch {
-    return false;
-  }
-}
-
-async function isContainerRunning(
-  containerId: string | null,
-): Promise<boolean> {
-  if (!containerId) return false;
-  try {
-    const container = docker.getContainer(containerId);
-    const info = await container.inspect();
-    return info.State.Running;
   } catch {
     return false;
   }
@@ -118,6 +115,10 @@ Options:
   --hostname <host>       Hostname to bind (default: 0.0.0.0)
   --name <name>           Instance name
   --docker                Run OpenCode in a Docker container instead of locally
+
+Environment Variables:
+  OPENCODE_DOCKER_IMAGE   Docker image to use (default: ghcr.io/anomalyco/opencode:1.1.3)
+  DOCKER_HOST             Docker daemon connection (e.g., tcp://localhost:2375)
 
 Examples:
   openportal                               Start OpenCode + Web UI
@@ -205,26 +206,21 @@ async function startOpenCodeDockerContainer(
   console.log(`  Image: ${OPENCODE_DOCKER_IMAGE}`);
   console.log(`  Mount: ${directory} -> ${directory}`);
 
-  try {
-    await docker.getImage(OPENCODE_DOCKER_IMAGE).inspect();
-    console.log(`  Image already available locally`);
-  } catch {
-    console.log(`  Pulling image ${OPENCODE_DOCKER_IMAGE}...`);
-    await new Promise<void>((resolve, reject) => {
-      docker.pull(
-        OPENCODE_DOCKER_IMAGE,
-        (err: Error | null, stream: NodeJS.ReadableStream) => {
-          if (err) return reject(err);
-          docker.modem.followProgress(stream, (err: Error | null) => {
-            if (err) return reject(err);
-            resolve();
-          });
-        },
-      );
-    });
-    console.log(`  Image pulled successfully`);
+  const pathValidation = validateMountPath(directory);
+  if (!pathValidation.valid) {
+    throw new Error(pathValidation.reason);
   }
 
+  const imageResult = await ensureImageExists(OPENCODE_DOCKER_IMAGE, (status) =>
+    console.log(`  ${status}`),
+  );
+  if (!imageResult.success) {
+    throw (
+      imageResult.error || new Error("Failed to ensure Docker image exists")
+    );
+  }
+
+  const docker = getDockerClient();
   const containerName = `openportal-${name}-${generateId()}`;
 
   const container = await docker.createContainer({
@@ -241,7 +237,7 @@ async function startOpenCodeDockerContainer(
           { HostIp: hostname, HostPort: String(opencodePort) },
         ],
       },
-      AutoRemove: false,
+      AutoRemove: true,
     },
     WorkingDir: directory,
     Tty: false,
@@ -259,17 +255,6 @@ async function startOpenCodeDockerContainer(
   return info.Id;
 }
 
-async function stopDockerContainer(containerId: string): Promise<void> {
-  try {
-    const container = docker.getContainer(containerId);
-    const info = await container.inspect();
-    if (info.State.Running) {
-      await container.stop({ t: 10 });
-    }
-    await container.remove({ force: true });
-  } catch {}
-}
-
 async function startWebServer(port: number, hostname: string): Promise<number> {
   console.log(`Starting Web UI server...`);
   const proc = Bun.spawn(["bun", "run", WEB_SERVER_PATH], {
@@ -284,6 +269,22 @@ async function startWebServer(port: number, hostname: string): Promise<number> {
     },
   });
   return proc.pid;
+}
+
+function logInstanceInfo(
+  instanceType: InstanceType,
+  containerId: string | null,
+  opencodePid: number | null,
+) {
+  if (instanceType === "docker") {
+    if (containerId) {
+      console.log(`   Container ID: ${containerId.substring(0, 12)}`);
+    }
+  } else {
+    if (opencodePid !== null) {
+      console.log(`   OpenCode PID: ${opencodePid}`);
+    }
+  }
 }
 
 async function cmdDefault(
@@ -323,11 +324,11 @@ async function cmdDefault(
       }
       if (existing.port) {
         console.log(
-          `\n📱 Access OpenPortal at http://localhost:${existing.port}`,
+          `\n📱 Access OpenPortal at http://${hostname === "0.0.0.0" ? "localhost" : hostname}:${existing.port}`,
         );
       }
       console.log(
-        `🔧 OpenCode API at http://localhost:${existing.opencodePort}`,
+        `🔧 OpenCode API at http://${hostname === "0.0.0.0" ? "localhost" : hostname}:${existing.opencodePort}`,
       );
       return;
     }
@@ -386,15 +387,13 @@ async function cmdDefault(
     config.instances.push(instance);
     writeConfig(config);
 
+    const displayHost = hostname === "0.0.0.0" ? "localhost" : hostname;
+
     console.log(`\n✅ OpenPortal started!`);
-    if (useDocker && containerId) {
-      console.log(`   Container ID: ${containerId.substring(0, 12)}`);
-    } else {
-      console.log(`   OpenCode PID: ${opencodePid}`);
-    }
+    logInstanceInfo(instance.instanceType, containerId, opencodePid);
     console.log(`   Web UI PID: ${webPid}`);
-    console.log(`\n📱 Access OpenPortal at http://localhost:${port}`);
-    console.log(`🔧 OpenCode API at http://localhost:${opencodePort}`);
+    console.log(`\n📱 Access OpenPortal at http://${displayHost}:${port}`);
+    console.log(`🔧 OpenCode API at http://${displayHost}:${opencodePort}`);
   } catch (error) {
     if (error instanceof Error) {
       console.error(`\n❌ Failed to start OpenPortal: ${error.message}`);
@@ -432,7 +431,7 @@ async function cmdRun(options: Record<string, string | boolean | undefined>) {
         console.log(`  Container ID: ${existing.containerId.substring(0, 12)}`);
       }
       console.log(
-        `🔧 OpenCode API at http://localhost:${existing.opencodePort}`,
+        `🔧 OpenCode API at http://${hostname === "0.0.0.0" ? "localhost" : hostname}:${existing.opencodePort}`,
       );
       return;
     }
@@ -482,13 +481,11 @@ async function cmdRun(options: Record<string, string | boolean | undefined>) {
     config.instances.push(instance);
     writeConfig(config);
 
+    const displayHost = hostname === "0.0.0.0" ? "localhost" : hostname;
+
     console.log(`\n✅ OpenCode server started!`);
-    if (useDocker && containerId) {
-      console.log(`   Container ID: ${containerId.substring(0, 12)}`);
-    } else {
-      console.log(`   OpenCode PID: ${opencodePid}`);
-    }
-    console.log(`🔧 OpenCode API at http://localhost:${opencodePort}`);
+    logInstanceInfo(instance.instanceType, containerId, opencodePid);
+    console.log(`🔧 OpenCode API at http://${displayHost}:${opencodePort}`);
   } catch (error) {
     if (error instanceof Error) {
       console.error(`\n❌ Failed to start OpenCode: ${error.message}`);
@@ -514,12 +511,12 @@ async function cmdStop(options: Record<string, string | boolean | undefined>) {
   }
 
   if (instance.instanceType === "docker" && instance.containerId) {
-    try {
-      await stopDockerContainer(instance.containerId);
+    const result = await stopAndRemoveContainer(instance.containerId);
+    if (result.success) {
       console.log(
         `Stopped and removed Docker container (ID: ${instance.containerId.substring(0, 12)})`,
       );
-    } catch {
+    } else {
       console.log("Docker container was already stopped or removed.");
     }
   } else if (instance.opencodePid !== null) {
@@ -601,9 +598,12 @@ async function cmdClean() {
       validInstances.push(instance);
     } else {
       if (instance.instanceType === "docker" && instance.containerId) {
-        try {
-          await stopDockerContainer(instance.containerId);
-        } catch {}
+        const result = await stopAndRemoveContainer(instance.containerId);
+        if (!result.success && result.error) {
+          console.warn(
+            `  Warning: Could not clean up container ${instance.containerId.substring(0, 12)}`,
+          );
+        }
       }
       console.log(
         `Removed stale entry: ${instance.name} (${instance.instanceType})`,

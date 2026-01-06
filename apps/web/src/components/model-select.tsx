@@ -5,7 +5,6 @@ import {
   Popover,
   useFilter,
 } from "react-aria-components";
-import { Label } from "@/components/ui/field";
 import { Dialog } from "@/components/ui/dialog";
 import { SearchField, SearchInput } from "@/components/ui/search-field";
 import {
@@ -96,7 +95,7 @@ export function ModelSelect() {
     <Select
       aria-label="Model"
       placeholder={isLoading ? "Loading models..." : "Select a model"}
-      className="min-w-48"
+      className="w-auto"
       selectedKey={selectedModelKey}
       onSelectionChange={(key) => {
         if (key) {
@@ -104,8 +103,7 @@ export function ModelSelect() {
         }
       }}
     >
-      <Label className="sr-only">Model</Label>
-      <SelectTrigger className="w-48 ml-auto" />
+      <SelectTrigger className="w-48" />
       <Popover className="entering:fade-in exiting:fade-out flex max-h-96 w-(--trigger-width) entering:animate-in exiting:animate-out flex-col overflow-hidden rounded-lg border bg-overlay">
         <Dialog aria-label="Model">
           <Autocomplete filter={contains}>

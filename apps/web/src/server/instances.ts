@@ -2,11 +2,9 @@ import { defineHandler } from "nitro/h3";
 import { homedir } from "os";
 import { join } from "path";
 import { readFileSync, existsSync } from "fs";
-import Docker from "dockerode";
+import { isContainerRunning } from "./lib/docker";
 
 const CONFIG_PATH = join(homedir(), ".portal.json");
-
-const docker = new Docker({ socketPath: "/var/run/docker.sock" });
 
 type InstanceType = "process" | "docker";
 
@@ -42,7 +40,12 @@ function readConfig(): PortalConfig {
       }));
       return config;
     }
-  } catch {}
+  } catch (error) {
+    console.warn(
+      `[config] Failed to read config file:`,
+      error instanceof Error ? error.message : error,
+    );
+  }
   return { instances: [] };
 }
 
@@ -51,19 +54,6 @@ function isProcessRunning(pid: number | null): boolean {
   try {
     process.kill(pid, 0);
     return true;
-  } catch {
-    return false;
-  }
-}
-
-async function isContainerRunning(
-  containerId: string | null,
-): Promise<boolean> {
-  if (!containerId) return false;
-  try {
-    const container = docker.getContainer(containerId);
-    const info = await container.inspect();
-    return info.State.Running;
   } catch {
     return false;
   }

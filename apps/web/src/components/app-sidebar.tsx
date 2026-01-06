@@ -106,7 +106,8 @@ export default function AppSidebar(
   const diffFileCount = useMemo(() => {
     if (!diffData?.diff) return 0;
     try {
-      return parsePatchFiles(diffData.diff).length;
+      const patches = parsePatchFiles(diffData.diff);
+      return patches.reduce((count, patch) => count + patch.files.length, 0);
     } catch {
       return 0;
     }
