@@ -11,12 +11,11 @@ import {
 } from "@heroicons/react/24/solid";
 import FileDiffIcon from "@/components/icons/file-diff-icon";
 import { useState, useMemo } from "react";
-import { parseDiff } from "react-diff-view";
+import { parsePatchFiles } from "@pierre/diffs";
 import { Avatar } from "@/components/ui/avatar";
 import { Link as UILink } from "@/components/ui/link";
 import { toast } from "@/components/ui/toast";
 import IconBox from "@/components/icons/box-icon";
-import posthog from "posthog-js";
 import {
   Menu,
   MenuContent,
@@ -107,7 +106,7 @@ export default function AppSidebar(
   const diffFileCount = useMemo(() => {
     if (!diffData?.diff) return 0;
     try {
-      return parseDiff(diffData.diff).length;
+      return parsePatchFiles(diffData.diff).length;
     } catch {
       return 0;
     }
@@ -119,7 +118,6 @@ export default function AppSidebar(
     try {
       const session = await createSession();
       await mutateSessions();
-      posthog.capture("session_created");
       toast.success("Session created");
       navigate({ to: "/session/$id", params: { id: session.id } });
     } catch (error) {
@@ -181,7 +179,6 @@ export default function AppSidebar(
             <SidebarItem
               tooltip="View Git Diff"
               href="/diff"
-              onPress={() => posthog.capture("diff_viewed")}
               className="cursor-pointer gap-x-2"
               badge={diffFileCount > 0 ? diffFileCount : undefined}
             >
