@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader } from "@/components/ui/loader";
+import { AgentSelect } from "@/components/agent-select";
 import { ModelSelect } from "@/components/model-select";
 import {
   FileMentionPopover,
@@ -20,6 +21,7 @@ import IconEye from "@/components/icons/eye-icon";
 import IconPen from "@/components/icons/pen-icon";
 import IconSquareFeather from "@/components/icons/feather-icon";
 import SendIcon from "@/components/icons/send-icon";
+import { useAgentStore } from "@/stores/agent-store";
 import { useInstanceStore } from "@/stores/instance-store";
 import { useModelStore } from "@/stores/model-store";
 import { useBreadcrumb } from "@/contexts/breadcrumb-context";
@@ -225,6 +227,7 @@ function SessionPage() {
   } = useSessionMessages(sessionId);
   const { data: sessionsData, mutate: mutateSessions } = useSessions();
   const selectedModel = useModelStore((s) => s.selectedModel);
+  const selectedAgent = useAgentStore((s) => s.getSelectedAgent(sessionId));
   const { setPageTitle } = useBreadcrumb();
 
   const sessions: Session[] = sessionsData ?? [];
@@ -317,7 +320,11 @@ function SessionPage() {
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: messageText, model: selectedModel }),
+            body: JSON.stringify({
+              text: messageText,
+              model: selectedModel,
+              agent: selectedAgent,
+            }),
           },
         );
 
@@ -335,7 +342,7 @@ function SessionPage() {
         removeOptimisticMessage(port, sessionId, messageId);
       }
     },
-    [sessionId, port, mutateSessions, selectedModel],
+    [sessionId, port, mutateSessions, selectedModel, selectedAgent],
   );
 
   const processQueue = useCallback(async () => {
@@ -528,16 +535,21 @@ function SessionPage() {
             className="w-full resize-none min-h-32 max-h-32 overflow-y-auto"
             rows={5}
           />
-          <div className="mt-3 flex items-center justify-end gap-2">
-            <ModelSelect />
-            <Button
-              type="submit"
-              isDisabled={!input.trim()}
-              className="min-w-32"
-            >
-              <SendIcon size="16px" />
-              {sending ? "Sending..." : "Send"}
-            </Button>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center justify-between gap-2 sm:justify-start">
+              <AgentSelect sessionId={sessionId} />
+            </div>
+            <div className="flex items-center justify-between gap-2 sm:justify-end">
+              <ModelSelect />
+              <Button
+                type="submit"
+                isDisabled={!input.trim()}
+                className="min-w-32"
+              >
+                <SendIcon size="16px" />
+                {sending ? "Sending..." : "Send"}
+              </Button>
+            </div>
           </div>
         </form>
       </div>

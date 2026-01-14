@@ -54,6 +54,12 @@ export function useProviders() {
   return useSWR(port ? `/api/opencode/${port}/providers` : null, fetcher);
 }
 
+export function useAgents() {
+  const port = usePort();
+
+  return useSWR(port ? `/api/opencode/${port}/agents` : null, fetcher);
+}
+
 export function useHealth() {
   const port = usePort();
 

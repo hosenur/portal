@@ -7,6 +7,7 @@ interface PromptBody {
     providerID: string;
     modelID: string;
   };
+  agent?: string;
 }
 
 export default defineHandler(async (event) => {
@@ -33,6 +34,7 @@ export default defineHandler(async (event) => {
     body: {
       parts: [{ type: "text", text: body.text }],
       model: body.model,
+      agent: body.agent,
     },
   });
 
