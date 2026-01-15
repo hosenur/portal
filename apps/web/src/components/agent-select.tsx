@@ -37,11 +37,6 @@ export function AgentSelect({ sessionId }: AgentSelectProps) {
   const setSelectedAgent = useAgentStore((s) => s.setSelectedAgent);
 
   useEffect(() => {
-    if (!sessionId || selectedAgent) return;
-    setSelectedAgent(sessionId, "plan");
-  }, [sessionId, selectedAgent, setSelectedAgent]);
-
-  useEffect(() => {
     if (!sessionId || agents.length === 0) return;
     if (isValidAgent(agents, selectedAgent)) return;
 
