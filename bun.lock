@@ -85,7 +85,7 @@
     },
     "packages/cli": {
       "name": "openportal",
-      "version": "0.1.23",
+      "version": "0.1.25",
       "bin": {
         "openportal": "./dist/index.js",
       },

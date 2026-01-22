@@ -322,7 +322,7 @@ function SessionPage() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               text: messageText,
-              model: selectedModel,
+              model: selectedAgent ? undefined : selectedModel,
               agent: selectedAgent,
             }),
           },
@@ -540,7 +540,7 @@ function SessionPage() {
               <AgentSelect sessionId={sessionId} />
             </div>
             <div className="flex items-center justify-between gap-2 sm:justify-end">
-              <ModelSelect />
+              {!selectedAgent && <ModelSelect />}
               <Button
                 type="submit"
                 isDisabled={!input.trim()}
