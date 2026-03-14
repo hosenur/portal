@@ -42,6 +42,11 @@ export function getOpencodeClient(port: number) {
   return client;
 }
 
+export function getOpencodeBaseUrl(port: number): string {
+  const hostname = getHostnameForPort(port);
+  return `http://${hostname}:${port}`;
+}
+
 export function clearClientCache(port?: number) {
   if (port) {
     const hostname = getHostnameForPort(port);

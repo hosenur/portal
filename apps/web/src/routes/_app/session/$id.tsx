@@ -47,8 +47,108 @@ interface QueuedMessage {
   text: string;
 }
 
+interface ToolQuestionOption {
+  label: string;
+  description?: string;
+  recommended?: boolean;
+}
+
+interface ToolQuestionInput {
+  header?: string;
+  question: string;
+  options?: ToolQuestionOption[];
+  multiSelect?: boolean;
+  multiple?: boolean;
+  allowFreeformInput?: boolean;
+}
+
+function parseBooleanFlag(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "yes", "y", "on"].includes(normalized)) {
+      return true;
+    }
+    if (["false", "0", "no", "n", "off", ""].includes(normalized)) {
+      return false;
+    }
+  }
+  return undefined;
+}
+
 function isToolPart(part: Part): part is ToolPart {
   return part.type === "tool";
+}
+
+function parseToolQuestions(part: ToolPart): ToolQuestionInput[] {
+  const input = (part.state?.input || {}) as Record<string, unknown>;
+  const rawQuestions = input.questions;
+
+  if (!Array.isArray(rawQuestions)) {
+    return [];
+  }
+
+  return rawQuestions
+    .filter(
+      (item): item is Record<string, unknown> =>
+        typeof item === "object" && item !== null,
+    )
+    .map((item) => {
+      const question = String(item.question || "");
+      const lowerQuestion = question.toLowerCase();
+
+      const inferredFreeformFromText = /(free\s?form|open\s?answer|open[-\s]?ended|risposta\s+aperta|risposta\s+libera|testo\s+libero|scrivi|altra\s+risposta|other)/.test(
+        lowerQuestion,
+      );
+
+      const multiSelect =
+        parseBooleanFlag(
+          item.multiSelect ?? item.multiple ?? item.multi ?? item.isMultiSelect,
+        ) ?? false;
+
+      const explicitFreeform = parseBooleanFlag(
+        item.allowFreeformInput ??
+          item.allowFreeFormInput ??
+          item.allowOpenAnswer ??
+          item.allowOtherInput ??
+          item.allowCustomInput ??
+          item.freeform ??
+          item.openAnswer ??
+          item.customInput,
+      );
+
+      const allowFreeformInput =
+        explicitFreeform !== undefined
+          ? explicitFreeform
+          : inferredFreeformFromText || true;
+
+      const options = Array.isArray(item.options)
+        ? item.options
+            .filter(
+              (opt): opt is Record<string, unknown> =>
+                typeof opt === "object" && opt !== null,
+            )
+            .map((opt) => ({
+              label: String(opt.label || ""),
+              description: opt.description
+                ? String(opt.description)
+                : undefined,
+              recommended: Boolean(opt.recommended),
+            }))
+            .filter((opt) => !!opt.label)
+        : undefined;
+
+      return {
+        header: item.header ? String(item.header) : undefined,
+        question,
+        options,
+        multiSelect,
+        multiple: multiSelect,
+        allowFreeformInput,
+      };
+    })
+    .filter((q) => !!q.question);
 }
 
 function formatToolCall(part: ToolPart): {
@@ -139,12 +239,279 @@ function getMessageContent(parts: Part[]): string {
     .join("\n\n");
 }
 
-const ToolCallItem = memo(function ToolCallItem({ part }: { part: ToolPart }) {
+function QuestionAnswerForm({
+  questions,
+  partKey,
+  port,
+  sessionId,
+  callID,
+}: {
+  questions: ToolQuestionInput[];
+  partKey: string;
+  port: number;
+  sessionId: string;
+  callID: string;
+}) {
+  const [selections, setSelections] = useState<Record<number, string[]>>({});
+  const [freeformInputs, setFreeformInputs] = useState<Record<number, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const toggleOption = (qIdx: number, label: string, isMulti: boolean) => {
+    setSelections((prev) => {
+      const current = prev[qIdx] || [];
+      if (isMulti) {
+        return {
+          ...prev,
+          [qIdx]: current.includes(label)
+            ? current.filter((l) => l !== label)
+            : [...current, label],
+        };
+      }
+      return { ...prev, [qIdx]: current.includes(label) ? [] : [label] };
+    });
+  };
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      // Fetch pending questions to get the requestID
+      const listRes = await fetch(`/api/opencode/${port}/questions`);
+      if (!listRes.ok) throw new Error("Failed to fetch pending questions");
+      const pendingQuestions = (await listRes.json()) as Array<{
+        id: string;
+        sessionID: string;
+        tool?: { messageID: string; callID: string };
+      }>;
+
+      // Match by sessionID and callID
+      const match = pendingQuestions.find(
+        (q) => q.sessionID === sessionId && q.tool?.callID === callID,
+      );
+
+      if (!match) {
+        throw new Error("Question request not found - it may have already been answered");
+      }
+
+      // Build answers array: one string[] per question
+      const answers: string[][] = questions.map((_, i) => {
+        const selected = selections[i] || [];
+        const freeform = freeformInputs[i]?.trim() || "";
+        if (selected.length > 0) return selected;
+        if (freeform) return [freeform];
+        return [];
+      });
+
+      const replyRes = await fetch(
+        `/api/opencode/${port}/question/${match.id}/reply`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ answers }),
+        },
+      );
+
+      if (!replyRes.ok) throw new Error("Failed to submit answers");
+
+      mutateSessionMessages(port, sessionId);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Failed to submit answers");
+      setSubmitting(false);
+    }
+  };
+
+  const hasAnswersForAllQuestions =
+    questions.length > 0 &&
+    questions.every((_, i) => {
+      const selected = selections[i] || [];
+      const freeform = freeformInputs[i]?.trim() || "";
+      return selected.length > 0 || freeform.length > 0;
+    });
+
+  return (
+    <div className="mt-2 space-y-3 text-fg/90">
+      {questions.map((q, idx) => {
+        const isMulti = q.multiSelect || q.multiple;
+        const selected = selections[idx] || [];
+
+        return (
+          <div key={`${partKey}-q-${idx}`} className="space-y-1.5">
+            {(q.header || isMulti) && (
+              <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-fg">
+                {q.header && <span>{q.header}</span>}
+                {isMulti && (
+                  <span className="rounded border border-warning/50 bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">
+                    Selezione multipla
+                  </span>
+                )}
+              </div>
+            )}
+            <p className="text-xs leading-relaxed">{q.question}</p>
+
+            {q.options && q.options.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {q.options.map((opt, optIdx) => {
+                  const isSelected = selected.includes(opt.label);
+                  return (
+                    <button
+                      key={`opt-${idx}-${optIdx}`}
+                      type="button"
+                      disabled={submitting}
+                      onClick={() => toggleOption(idx, opt.label, !!isMulti)}
+                      className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors ${
+                        isSelected
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border bg-bg hover:border-fg/30 text-fg/80"
+                      } ${submitting ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                    >
+                      <span>{opt.label}</span>
+                      {opt.recommended && (
+                        <span className="text-[9px] uppercase text-primary/70">rec</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {(!q.options || q.options.length === 0 || q.allowFreeformInput) && (
+              <input
+                type="text"
+                disabled={submitting}
+                placeholder="Type your answer..."
+                value={freeformInputs[idx] || ""}
+                onChange={(e) =>
+                  setFreeformInputs((prev) => ({ ...prev, [idx]: e.target.value }))
+                }
+                className="w-full rounded-md border border-border bg-bg px-2 py-1 text-xs text-fg placeholder:text-muted-fg focus:outline-none focus:border-primary"
+              />
+            )}
+
+            {isMulti && (
+              <div className="text-[11px] text-warning/90">
+                Puoi selezionare piu di una opzione
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {submitError && (
+        <div className="text-[11px] text-danger">{submitError}</div>
+      )}
+
+      <Button
+        type="button"
+        size="sm"
+        isDisabled={!hasAnswersForAllQuestions || submitting}
+        onPress={handleSubmit}
+        className="mt-1"
+      >
+        <SendIcon size="12px" />
+        {submitting ? "Sending..." : "Submit Answers"}
+      </Button>
+    </div>
+  );
+}
+
+const ToolCallItem = memo(function ToolCallItem({
+  part,
+  port,
+  sessionId,
+}: {
+  part: ToolPart;
+  port: number;
+  sessionId: string;
+}) {
   const { icon, label, details } = formatToolCall(part);
+  const isQuestionTool = (part.tool || "").toLowerCase() === "question";
+  const questions = isQuestionTool ? parseToolQuestions(part) : [];
+  const hasQuestions = questions.length > 0;
   const isCompleted = part.state.status === "completed";
   const isError = part.state.status === "error";
   const isPending =
     part.state.status === "pending" || part.state.status === "running";
+
+  if (hasQuestions) {
+    return (
+      <div
+        className={`rounded-md border px-3 py-2 text-xs ${
+          isError
+            ? "border-danger/40 bg-danger-subtle/30"
+            : isCompleted
+              ? "border-border bg-muted/25"
+              : "border-warning/40 bg-warning/10"
+        }`}
+      >
+        <div className="font-mono text-xs flex items-center gap-1.5 min-w-0">
+          <span className="opacity-60 shrink-0">{icon}</span>
+          <span className="truncate">{label}</span>
+          {details && <span className="opacity-60 shrink-0">{details}</span>}
+          {isPending && <span className="animate-pulse shrink-0">...</span>}
+        </div>
+
+        {isPending && port ? (
+          <QuestionAnswerForm
+            questions={questions}
+            partKey={part.callID || part.id}
+            port={port}
+            sessionId={sessionId}
+            callID={part.callID || ""}
+          />
+        ) : (
+          <div className="mt-2 space-y-2 text-fg/90">
+            {questions.map((q, idx) => {
+              const isMulti = q.multiSelect || q.multiple;
+
+              return (
+                <div key={`${part.callID || part.id}-q-${idx}`} className="space-y-1">
+                  {(q.header || isMulti) && (
+                    <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-fg">
+                      {q.header && <span>{q.header}</span>}
+                      {isMulti && (
+                        <span className="rounded border border-warning/50 bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">
+                          Selezione multipla
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <p className="text-xs leading-relaxed">{q.question}</p>
+
+                  {q.options && q.options.length > 0 && (
+                    <ul className="space-y-1 ml-3 list-disc text-muted-fg">
+                      {q.options.map((opt, optIdx) => (
+                        <li key={`opt-${idx}-${optIdx}`}>
+                          <span className="text-fg">{opt.label}</span>
+                          {opt.recommended && (
+                            <span className="ml-1 text-[10px] uppercase text-primary/90">
+                              Recommended
+                            </span>
+                          )}
+                          {opt.description && (
+                            <span className="text-muted-fg"> - {opt.description}</span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {(isMulti || q.allowFreeformInput) && (
+                    <div className="text-[11px] text-muted-fg">
+                      {isMulti && "Puoi selezionare piu opzioni"}
+                      {isMulti && q.allowFreeformInput && " | "}
+                      {q.allowFreeformInput && "Freeform input allowed"}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -168,8 +535,12 @@ const ToolCallItem = memo(function ToolCallItem({ part }: { part: ToolPart }) {
 
 const MessageItem = memo(function MessageItem({
   message,
+  port,
+  sessionId,
 }: {
   message: MessageWithParts;
+  port: number;
+  sessionId: string;
 }) {
   const textContent = getMessageContent(message.parts);
   const isAssistant = message.info.role === "assistant";
@@ -201,7 +572,12 @@ const MessageItem = memo(function MessageItem({
       {toolCalls.length > 0 && (
         <div className={`${textContent ? "mt-2 ml-6" : ""} space-y-0.5`}>
           {toolCalls.map((part) => (
-            <ToolCallItem key={part.callID || part.id} part={part} />
+            <ToolCallItem
+              key={part.callID || part.id}
+              part={part}
+              port={port}
+              sessionId={sessionId}
+            />
           ))}
         </div>
       )}
@@ -322,7 +698,7 @@ function SessionPage() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               text: messageText,
-              model: selectedAgent ? undefined : selectedModel,
+              model: selectedModel,
               agent: selectedAgent,
             }),
           },
@@ -449,7 +825,12 @@ function SessionPage() {
           {messages
             .filter((message) => hasVisibleContent(message))
             .map((message) => (
-              <MessageItem key={message.info.id} message={message} />
+              <MessageItem
+                key={message.info.id}
+                message={message}
+                port={port}
+                sessionId={sessionId}
+              />
             ))}
           <div ref={messagesEndRef} />
         </div>
@@ -540,7 +921,7 @@ function SessionPage() {
               <AgentSelect sessionId={sessionId} />
             </div>
             <div className="flex items-center justify-between gap-2 sm:justify-end">
-              {!selectedAgent && <ModelSelect />}
+              <ModelSelect />
               <Button
                 type="submit"
                 isDisabled={!input.trim()}
