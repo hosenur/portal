@@ -62,6 +62,68 @@ interface ToolQuestionInput {
   allowFreeformInput?: boolean;
 }
 
+type PermissionReply = "once" | "always" | "reject";
+
+interface PendingPermission {
+  id: string;
+  sessionID: string;
+  permission: string;
+  patterns?: string[];
+  metadata?: Record<string, unknown>;
+  always?: string[];
+  tool?: {
+    messageID?: string;
+    callID?: string;
+  };
+}
+
+function parsePendingPermissions(data: unknown): PendingPermission[] {
+  if (!Array.isArray(data)) return [];
+
+  return data
+    .filter(
+      (item): item is Record<string, unknown> =>
+        typeof item === "object" && item !== null,
+    )
+    .map((item) => {
+      const rawPatterns = Array.isArray(item.patterns)
+        ? item.patterns.map((p) => String(p)).filter(Boolean)
+        : undefined;
+
+      const rawAlways = Array.isArray(item.always)
+        ? item.always.map((p) => String(p)).filter(Boolean)
+        : undefined;
+
+      const tool =
+        typeof item.tool === "object" && item.tool !== null
+          ? {
+              messageID:
+                "messageID" in item.tool && item.tool.messageID
+                  ? String(item.tool.messageID)
+                  : undefined,
+              callID:
+                "callID" in item.tool && item.tool.callID
+                  ? String(item.tool.callID)
+                  : undefined,
+            }
+          : undefined;
+
+      return {
+        id: String(item.id || ""),
+        sessionID: String(item.sessionID || ""),
+        permission: String(item.permission || ""),
+        patterns: rawPatterns,
+        metadata:
+          typeof item.metadata === "object" && item.metadata !== null
+            ? (item.metadata as Record<string, unknown>)
+            : undefined,
+        always: rawAlways,
+        tool,
+      };
+    })
+    .filter((item) => !!item.id && !!item.sessionID && !!item.permission);
+}
+
 function parseBooleanFlag(value: unknown): boolean | undefined {
   if (typeof value === "boolean") return value;
   if (typeof value === "number") return value !== 0;
@@ -416,6 +478,91 @@ function QuestionAnswerForm({
   );
 }
 
+function PermissionRequestForm({
+  permission,
+  port,
+  onResolved,
+}: {
+  permission: PendingPermission;
+  port: number;
+  onResolved: (permissionId: string) => void;
+}) {
+  const [submitting, setSubmitting] = useState<PermissionReply | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const handleReply = async (reply: PermissionReply) => {
+    setSubmitting(reply);
+    setSubmitError(null);
+
+    try {
+      const response = await fetch(
+        `/api/opencode/${port}/permission/${permission.id}/reply`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reply }),
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to reply to permission request");
+      }
+
+      onResolved(permission.id);
+    } catch (err) {
+      setSubmitError(
+        err instanceof Error ? err.message : "Failed to reply to permission",
+      );
+      setSubmitting(null);
+    }
+  };
+
+  const firstPattern = permission.patterns?.[0];
+
+  return (
+    <div className="mt-2 rounded-md border border-warning/50 bg-warning/10 px-3 py-2 text-xs space-y-2">
+      <div className="font-medium text-warning">Permission required</div>
+      <div className="text-fg/90">
+        Tool requests <span className="font-mono">{permission.permission}</span>
+      </div>
+      {firstPattern && (
+        <div className="text-muted-fg break-all">
+          Path: <span className="font-mono">{firstPattern}</span>
+        </div>
+      )}
+      <div className="flex flex-wrap gap-1.5 pt-0.5">
+        <Button
+          type="button"
+          size="sm"
+          isDisabled={!!submitting}
+          onPress={() => handleReply("once")}
+        >
+          {submitting === "once" ? "Allowing..." : "Allow once"}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          isDisabled={!!submitting}
+          onPress={() => handleReply("always")}
+          className="bg-success/20 text-success hover:bg-success/25"
+        >
+          {submitting === "always" ? "Saving..." : "Allow always"}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          isDisabled={!!submitting}
+          onPress={() => handleReply("reject")}
+          className="bg-danger/20 text-danger hover:bg-danger/25"
+        >
+          {submitting === "reject" ? "Rejecting..." : "Reject"}
+        </Button>
+      </div>
+      {submitError && <div className="text-danger">{submitError}</div>}
+    </div>
+  );
+}
+
 const ToolCallItem = memo(function ToolCallItem({
   part,
   port,
@@ -537,14 +684,21 @@ const MessageItem = memo(function MessageItem({
   message,
   port,
   sessionId,
+  pendingPermissions,
+  onPermissionResolved,
 }: {
   message: MessageWithParts;
   port: number;
   sessionId: string;
+  pendingPermissions: PendingPermission[];
+  onPermissionResolved: (permissionId: string) => void;
 }) {
   const textContent = getMessageContent(message.parts);
   const isAssistant = message.info.role === "assistant";
   const toolCalls = message.parts.filter(isToolPart);
+  const messagePermissions = pendingPermissions.filter(
+    (perm) => perm.tool?.messageID === message.info.id,
+  );
 
   return (
     <div className="py-3 px-6">
@@ -577,6 +731,18 @@ const MessageItem = memo(function MessageItem({
               part={part}
               port={port}
               sessionId={sessionId}
+            />
+          ))}
+        </div>
+      )}
+      {messagePermissions.length > 0 && (
+        <div className={`${textContent ? "mt-2 ml-6" : ""} space-y-2`}>
+          {messagePermissions.map((permission) => (
+            <PermissionRequestForm
+              key={permission.id}
+              permission={permission}
+              port={port}
+              onResolved={onPermissionResolved}
             />
           ))}
         </div>
@@ -620,6 +786,9 @@ function SessionPage() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [messageQueue, setMessageQueue] = useState<QueuedMessage[]>([]);
+  const [pendingPermissions, setPendingPermissions] = useState<
+    PendingPermission[]
+  >([]);
   const [hasScrolledInitially, setHasScrolledInitially] = useState(false);
   const [fileResults, setFileResults] = useState<string[]>([]);
   const isProcessingQueue = useRef(false);
@@ -631,6 +800,50 @@ function SessionPage() {
   const fileMention = useFileMention();
 
   const error = messagesError?.message || sendError;
+
+  const refreshPendingPermissions = useCallback(async () => {
+    if (!port || !sessionId) {
+      setPendingPermissions([]);
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/opencode/${port}/permissions`);
+      if (!response.ok) return;
+      const data = await response.json();
+      const parsed = parsePendingPermissions(data).filter(
+        (item) => item.sessionID === sessionId,
+      );
+      setPendingPermissions(parsed);
+    } catch {
+      // Keep current UI state on transient permission polling failures.
+    }
+  }, [port, sessionId]);
+
+  const handlePermissionResolved = useCallback(
+    (permissionId: string) => {
+      setPendingPermissions((prev) => prev.filter((p) => p.id !== permissionId));
+      if (port && sessionId) {
+        mutateSessionMessages(port, sessionId);
+      }
+      refreshPendingPermissions();
+    },
+    [port, sessionId, refreshPendingPermissions],
+  );
+
+  useEffect(() => {
+    refreshPendingPermissions();
+
+    if (!port || !sessionId) return;
+
+    const interval = window.setInterval(refreshPendingPermissions, 2000);
+    return () => window.clearInterval(interval);
+  }, [port, sessionId, refreshPendingPermissions]);
+
+  const visibleMessageIds = new Set(messages.map((m) => m.info.id));
+  const unlinkedPermissions = pendingPermissions.filter(
+    (perm) => !perm.tool?.messageID || !visibleMessageIds.has(perm.tool.messageID),
+  );
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -830,8 +1043,22 @@ function SessionPage() {
                 message={message}
                 port={port}
                 sessionId={sessionId}
+                pendingPermissions={pendingPermissions}
+                onPermissionResolved={handlePermissionResolved}
               />
             ))}
+          {unlinkedPermissions.length > 0 && (
+            <div className="px-6 py-4 space-y-2 border-t border-dashed border-border">
+              {unlinkedPermissions.map((permission) => (
+                <PermissionRequestForm
+                  key={permission.id}
+                  permission={permission}
+                  port={port}
+                  onResolved={handlePermissionResolved}
+                />
+              ))}
+            </div>
+          )}
           <div ref={messagesEndRef} />
         </div>
 
