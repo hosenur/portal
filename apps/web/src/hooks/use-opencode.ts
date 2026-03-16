@@ -122,3 +122,99 @@ export function useGitDiff() {
     fetcher,
   );
 }
+
+export function usePermissions() {
+  const port = usePort();
+
+  return useSWR(
+    port ? `/api/opencode/${port}/permissions` : null,
+    fetcher,
+    { refreshInterval: 2000 },
+  );
+}
+
+export function useReplyPermission() {
+  const port = usePort();
+
+  return async (requestId: string, reply: "once" | "always" | "reject", message?: string) => {
+    if (!port) throw new Error("No instance selected");
+
+    const res = await fetch(`/api/opencode/${port}/permission/${requestId}/reply`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reply, message }),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to reply to permission: ${res.status}`);
+    }
+
+    return res.json();
+  };
+}
+
+export function useQuestions() {
+  const port = usePort();
+
+  return useSWR(
+    port ? `/api/opencode/${port}/questions` : null,
+    fetcher,
+    { refreshInterval: 2000 },
+  );
+}
+
+export function useReplyQuestion() {
+  const port = usePort();
+
+  return async (requestId: string, answers: Array<{ values: string[] }>) => {
+    if (!port) throw new Error("No instance selected");
+
+    const res = await fetch(`/api/opencode/${port}/question/${requestId}/reply`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ answers }),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to reply to question: ${res.status}`);
+    }
+
+    return res.json();
+  };
+}
+
+export function useRejectQuestion() {
+  const port = usePort();
+
+  return async (requestId: string) => {
+    if (!port) throw new Error("No instance selected");
+
+    const res = await fetch(`/api/opencode/${port}/question/${requestId}/reject`, {
+      method: "POST",
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to reject question: ${res.status}`);
+    }
+
+    return res.json();
+  };
+}
+
+export function useAbortSession() {
+  const port = usePort();
+
+  return async (sessionId: string) => {
+    if (!port) throw new Error("No instance selected");
+
+    const res = await fetch(`/api/opencode/${port}/session/${sessionId}/abort`, {
+      method: "POST",
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to abort session: ${res.status}`);
+    }
+
+    return res.json();
+  };
+}
