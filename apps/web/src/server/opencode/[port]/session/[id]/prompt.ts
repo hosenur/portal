@@ -1,32 +1,23 @@
-import { createError, defineHandler, getRouterParam, readBody } from "nitro/h3";
+import { z } from "zod/v4";
+import { HTTPError, defineHandler } from "nitro/h3";
 import { getOpencodeClient } from "../../../../lib/opencode-client";
+import { parsePort, parseRouteParam, parseBody } from "../../../../lib/validation";
 
-interface PromptBody {
-  text: string;
-  model?: {
-    providerID: string;
-    modelID: string;
-  };
-  agent?: string;
-}
+const promptBodySchema = z.object({
+  text: z.string().min(1),
+  model: z
+    .object({
+      providerID: z.string(),
+      modelID: z.string(),
+    })
+    .optional(),
+  agent: z.string().optional(),
+});
 
 export default defineHandler(async (event) => {
-  const port = Number(getRouterParam(event, "port"));
-  const id = getRouterParam(event, "id");
-
-  if (!port || isNaN(port)) {
-    throw createError({ statusCode: 400, statusMessage: "Invalid port" });
-  }
-
-  if (!id) {
-    throw createError({ statusCode: 400, statusMessage: "Session ID required" });
-  }
-
-  const body = await readBody<PromptBody>(event);
-
-  if (!body?.text) {
-    throw createError({ statusCode: 400, statusMessage: "Message text required" });
-  }
+  const port = parsePort(event);
+  const id = parseRouteParam(event, "id");
+  const body = await parseBody(event, promptBodySchema);
 
   const client = getOpencodeClient(port);
   const promptBody = {
@@ -42,7 +33,6 @@ export default defineHandler(async (event) => {
     });
     return result.data;
   } catch (error) {
-    // On timeout, fall back to async prompt which returns immediately
     const isTimeout =
       error instanceof Error &&
       (error.name === "TimeoutError" || error.cause instanceof DOMException);
@@ -55,9 +45,8 @@ export default defineHandler(async (event) => {
       return asyncResult.data;
     }
 
-    throw createError({
-      statusCode: 500,
-      statusMessage: error instanceof Error ? error.message : "Prompt failed",
+    throw new HTTPError(error instanceof Error ? error.message : "Prompt failed", {
+      status: 500,
     });
   }
 });

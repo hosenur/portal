@@ -1,31 +1,20 @@
-import type { QuestionAnswer } from "@opencode-ai/sdk/v2/client";
-import { createError, defineHandler, getRouterParam, readBody } from "nitro/h3";
+import { z } from "zod/v4";
+import { defineHandler } from "nitro/h3";
 import { getOpencodeClientV2 } from "../../../../lib/opencode-client";
+import { parsePort, parseRouteParam, parseBody } from "../../../../lib/validation";
 
-interface QuestionReplyBody {
-  answers: QuestionAnswer[];
-}
+const questionReplySchema = z.object({
+  answers: z.array(
+    z.object({
+      value: z.string(),
+    })
+  ),
+});
 
 export default defineHandler(async (event) => {
-  const port = Number(getRouterParam(event, "port"));
-  const requestId = getRouterParam(event, "requestId");
-
-  if (!port || isNaN(port)) {
-    throw createError({ statusCode: 400, statusMessage: "Invalid port" });
-  }
-
-  if (!requestId) {
-    throw createError({ statusCode: 400, statusMessage: "Request ID required" });
-  }
-
-  const body = await readBody<QuestionReplyBody>(event);
-
-  if (!body?.answers || !Array.isArray(body.answers)) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: "Answers array required",
-    });
-  }
+  const port = parsePort(event);
+  const requestId = parseRouteParam(event, "requestId");
+  const body = await parseBody(event, questionReplySchema);
 
   const client = getOpencodeClientV2(port);
   const result = await client.question.reply({
