@@ -4,11 +4,7 @@ import { getOpencodeClientV2 } from "../../../../lib/opencode-client";
 import { parsePort, parseRouteParam, parseBody } from "../../../../lib/validation";
 
 const questionReplySchema = z.object({
-  answers: z.array(
-    z.object({
-      value: z.string(),
-    })
-  ),
+  answers: z.array(z.array(z.string())),
 });
 
 export default defineHandler(async (event) => {

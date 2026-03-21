@@ -34,6 +34,11 @@ import {
   type MessageWithParts,
   type Part,
   type ToolPart,
+  type PermissionRequest,
+  type QuestionAnswer,
+  type QuestionInfo,
+  type QuestionOption,
+  type QuestionRequest,
 } from "@/hooks/use-session-messages";
 import { useSessions } from "@/hooks/use-opencode";
 import type { Session } from "@opencode-ai/sdk";
@@ -47,27 +52,25 @@ interface QueuedMessage {
   text: string;
 }
 
-interface ToolQuestionOption {
-  label: string;
+type ToolQuestionOption = Omit<QuestionOption, "description"> & {
   description?: string;
   recommended?: boolean;
-}
+};
 
-interface ToolQuestionInput {
+type ToolQuestionInput = Omit<QuestionInfo, "header" | "options" | "custom"> & {
   header?: string;
-  question: string;
   options?: ToolQuestionOption[];
   multiSelect?: boolean;
   multiple?: boolean;
   allowFreeformInput?: boolean;
-}
+};
 
 type PermissionReply = "once" | "always" | "reject";
 
-interface PendingPermission {
-  id: string;
-  sessionID: string;
-  permission: string;
+type PendingPermission = Omit<
+  PermissionRequest,
+  "patterns" | "metadata" | "always" | "tool"
+> & {
   patterns?: string[];
   metadata?: Record<string, unknown>;
   always?: string[];
@@ -75,7 +78,7 @@ interface PendingPermission {
     messageID?: string;
     callID?: string;
   };
-}
+};
 
 function parsePendingPermissions(data: unknown): PendingPermission[] {
   if (!Array.isArray(data)) return [];
@@ -111,13 +114,13 @@ function parsePendingPermissions(data: unknown): PendingPermission[] {
       return {
         id: String(item.id || ""),
         sessionID: String(item.sessionID || ""),
-        permission: String(item.permission || ""),
-        patterns: rawPatterns,
+        permission: String(item.permission || item.type || ""),
+        patterns: rawPatterns || [],
         metadata:
           typeof item.metadata === "object" && item.metadata !== null
             ? (item.metadata as Record<string, unknown>)
-            : undefined,
-        always: rawAlways,
+            : {},
+        always: rawAlways || [],
         tool,
       };
     })
@@ -342,11 +345,7 @@ function QuestionAnswerForm({
       // Fetch pending questions to get the requestID
       const listRes = await fetch(`/api/opencode/${port}/questions`);
       if (!listRes.ok) throw new Error("Failed to fetch pending questions");
-      const pendingQuestions = (await listRes.json()) as Array<{
-        id: string;
-        sessionID: string;
-        tool?: { messageID: string; callID: string };
-      }>;
+      const pendingQuestions = (await listRes.json()) as QuestionRequest[];
 
       // Match by sessionID and callID
       const match = pendingQuestions.find(
@@ -358,7 +357,7 @@ function QuestionAnswerForm({
       }
 
       // Build answers array: one string[] per question
-      const answers: string[][] = questions.map((_, i) => {
+      const answers: QuestionAnswer[] = questions.map((_, i) => {
         const selected = selections[i] || [];
         const freeform = freeformInputs[i]?.trim() || "";
         if (selected.length > 0) return selected;
@@ -485,7 +484,7 @@ function PermissionRequestForm({
 }: {
   permission: PendingPermission;
   port: number;
-  onResolved: (permissionId: string) => void;
+  onResolved: (requestId: string) => void;
 }) {
   const [submitting, setSubmitting] = useState<PermissionReply | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -691,7 +690,7 @@ const MessageItem = memo(function MessageItem({
   port: number;
   sessionId: string;
   pendingPermissions: PendingPermission[];
-  onPermissionResolved: (permissionId: string) => void;
+  onPermissionResolved: (requestId: string) => void;
 }) {
   const textContent = getMessageContent(message.parts);
   const isAssistant = message.info.role === "assistant";
@@ -821,8 +820,8 @@ function SessionPage() {
   }, [port, sessionId]);
 
   const handlePermissionResolved = useCallback(
-    (permissionId: string) => {
-      setPendingPermissions((prev) => prev.filter((p) => p.id !== permissionId));
+    (requestId: string) => {
+      setPendingPermissions((prev) => prev.filter((p) => p.id !== requestId));
       if (port && sessionId) {
         mutateSessionMessages(port, sessionId);
       }

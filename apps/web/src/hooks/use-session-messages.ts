@@ -6,9 +6,16 @@ import type {
   ToolState,
   TextPart,
 } from "@opencode-ai/sdk";
+import type {
+  PermissionRequest,
+  QuestionAnswer,
+  QuestionInfo,
+  QuestionOption,
+  QuestionRequest,
+} from "@opencode-ai/sdk/v2";
 import { useInstanceStore } from "@/stores/instance-store";
 
-export type { Message, Part, ToolPart, ToolState, TextPart };
+export type { Message, Part, ToolPart, ToolState, TextPart, PermissionRequest, QuestionAnswer, QuestionInfo, QuestionOption, QuestionRequest };
 
 export interface MessageWithParts {
   info: Message;
