@@ -37,7 +37,6 @@ import {
   type PermissionRequest,
   type QuestionAnswer,
   type QuestionInfo,
-  type QuestionOption,
   type QuestionRequest,
 } from "@/hooks/use-session-messages";
 import { useSessions } from "@/hooks/use-opencode";
@@ -52,103 +51,19 @@ interface QueuedMessage {
   text: string;
 }
 
-type ToolQuestionOption = Omit<QuestionOption, "description"> & {
-  description?: string;
-  recommended?: boolean;
-};
-
-type ToolQuestionInput = Omit<QuestionInfo, "header" | "options" | "custom"> & {
-  header?: string;
-  options?: ToolQuestionOption[];
-  multiSelect?: boolean;
-  multiple?: boolean;
-  allowFreeformInput?: boolean;
-};
-
 type PermissionReply = "once" | "always" | "reject";
 
-type PendingPermission = Omit<
-  PermissionRequest,
-  "patterns" | "metadata" | "always" | "tool"
-> & {
-  patterns?: string[];
-  metadata?: Record<string, unknown>;
-  always?: string[];
-  tool?: {
-    messageID?: string;
-    callID?: string;
-  };
-};
 
-function parsePendingPermissions(data: unknown): PendingPermission[] {
-  if (!Array.isArray(data)) return [];
-
-  return data
-    .filter(
-      (item): item is Record<string, unknown> =>
-        typeof item === "object" && item !== null,
-    )
-    .map((item) => {
-      const rawPatterns = Array.isArray(item.patterns)
-        ? item.patterns.map((p) => String(p)).filter(Boolean)
-        : undefined;
-
-      const rawAlways = Array.isArray(item.always)
-        ? item.always.map((p) => String(p)).filter(Boolean)
-        : undefined;
-
-      const tool =
-        typeof item.tool === "object" && item.tool !== null
-          ? {
-              messageID:
-                "messageID" in item.tool && item.tool.messageID
-                  ? String(item.tool.messageID)
-                  : undefined,
-              callID:
-                "callID" in item.tool && item.tool.callID
-                  ? String(item.tool.callID)
-                  : undefined,
-            }
-          : undefined;
-
-      return {
-        id: String(item.id || ""),
-        sessionID: String(item.sessionID || ""),
-        permission: String(item.permission || item.type || ""),
-        patterns: rawPatterns || [],
-        metadata:
-          typeof item.metadata === "object" && item.metadata !== null
-            ? (item.metadata as Record<string, unknown>)
-            : {},
-        always: rawAlways || [],
-        tool,
-      };
-    })
-    .filter((item) => !!item.id && !!item.sessionID && !!item.permission);
-}
-
-function parseBooleanFlag(value: unknown): boolean | undefined {
-  if (typeof value === "boolean") return value;
-  if (typeof value === "number") return value !== 0;
-  if (typeof value === "string") {
-    const normalized = value.trim().toLowerCase();
-    if (["true", "1", "yes", "y", "on"].includes(normalized)) {
-      return true;
-    }
-    if (["false", "0", "no", "n", "off", ""].includes(normalized)) {
-      return false;
-    }
-  }
-  return undefined;
-}
 
 function isToolPart(part: Part): part is ToolPart {
   return part.type === "tool";
 }
 
-function parseToolQuestions(part: ToolPart): ToolQuestionInput[] {
+function parseToolQuestions(part: ToolPart): QuestionInfo[] {
   const input = (part.state?.input || {}) as Record<string, unknown>;
   const rawQuestions = input.questions;
+
+  console.log("[parseToolQuestions] raw input:", JSON.stringify(input, null, 2));
 
   if (!Array.isArray(rawQuestions)) {
     return [];
@@ -160,57 +75,25 @@ function parseToolQuestions(part: ToolPart): ToolQuestionInput[] {
         typeof item === "object" && item !== null,
     )
     .map((item) => {
-      const question = String(item.question || "");
-      const lowerQuestion = question.toLowerCase();
-
-      const inferredFreeformFromText = /(free\s?form|open\s?answer|open[-\s]?ended|other(\s+answer)?|custom\s+answer|text\s+input|write|type\s+your\s+answer)/.test(
-        lowerQuestion,
-      );
-
-      const multiSelect =
-        parseBooleanFlag(
-          item.multiSelect ?? item.multiple ?? item.multi ?? item.isMultiSelect,
-        ) ?? false;
-
-      const explicitFreeform = parseBooleanFlag(
-        item.allowFreeformInput ??
-          item.allowFreeFormInput ??
-          item.allowOpenAnswer ??
-          item.allowOtherInput ??
-          item.allowCustomInput ??
-          item.freeform ??
-          item.openAnswer ??
-          item.customInput,
-      );
-
-      const allowFreeformInput =
-        explicitFreeform !== undefined
-          ? explicitFreeform
-          : inferredFreeformFromText;
-
-      const options = Array.isArray(item.options)
-        ? item.options
-            .filter(
-              (opt): opt is Record<string, unknown> =>
-                typeof opt === "object" && opt !== null,
-            )
-            .map((opt) => ({
-              label: String(opt.label || ""),
-              description: opt.description
-                ? String(opt.description)
-                : undefined,
-              recommended: Boolean(opt.recommended),
-            }))
-            .filter((opt) => !!opt.label)
-        : undefined;
-
+      console.log("[parseToolQuestions] raw question item:", JSON.stringify(item, null, 2));
+      console.log("[parseToolQuestions] custom field:", item.custom, "type:", typeof item.custom);
       return {
-        header: item.header ? String(item.header) : undefined,
-        question,
-        options,
-        multiSelect,
-        multiple: multiSelect,
-        allowFreeformInput,
+        question: String(item.question || ""),
+        header: String(item.header || ""),
+        options: Array.isArray(item.options)
+          ? item.options
+              .filter(
+                (opt): opt is Record<string, unknown> =>
+                  typeof opt === "object" && opt !== null,
+              )
+              .map((opt) => ({
+                label: String(opt.label || ""),
+                description: String(opt.description || ""),
+              }))
+              .filter((opt) => !!opt.label)
+          : [],
+        multiple: Boolean(item.multiple),
+        custom: item.custom !== false,
       };
     })
     .filter((q) => !!q.question);
@@ -311,7 +194,7 @@ function QuestionAnswerForm({
   sessionId,
   callID,
 }: {
-  questions: ToolQuestionInput[];
+  questions: QuestionInfo[];
   partKey: string;
   port: number;
   sessionId: string;
@@ -347,10 +230,13 @@ function QuestionAnswerForm({
       if (!listRes.ok) throw new Error("Failed to fetch pending questions");
       const pendingQuestions = (await listRes.json()) as QuestionRequest[];
 
-      // Match by sessionID and callID
-      const match = pendingQuestions.find(
-        (q) => q.sessionID === sessionId && q.tool?.callID === callID,
-      );
+      console.log("[handleSubmit] looking for sessionID:", sessionId, "callID:", callID);
+      console.log("[handleSubmit] pending questions:", JSON.stringify(pendingQuestions, null, 2));
+
+      // Match by callID first, then by sessionID as fallback
+      const match =
+        pendingQuestions.find((q) => q.tool?.callID === callID) ??
+        pendingQuestions.find((q) => q.sessionID === sessionId);
 
       if (!match) {
         throw new Error("Question request not found - it may have already been answered");
@@ -394,15 +280,14 @@ function QuestionAnswerForm({
   return (
     <div className="mt-2 space-y-3 text-fg/90">
       {questions.map((q, idx) => {
-        const isMulti = q.multiSelect || q.multiple;
         const selected = selections[idx] || [];
 
         return (
           <div key={`${partKey}-q-${idx}`} className="space-y-1.5">
-            {(q.header || isMulti) && (
+            {(q.header || q.multiple) && (
               <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-fg">
                 {q.header && <span>{q.header}</span>}
-                {isMulti && (
+                {q.multiple && (
                   <span className="rounded border border-warning/50 bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">
                     Multi-select
                   </span>
@@ -411,7 +296,7 @@ function QuestionAnswerForm({
             )}
             <p className="text-xs leading-relaxed">{q.question}</p>
 
-            {q.options && q.options.length > 0 && (
+            {q.options.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {q.options.map((opt, optIdx) => {
                   const isSelected = selected.includes(opt.label);
@@ -420,7 +305,7 @@ function QuestionAnswerForm({
                       key={`opt-${idx}-${optIdx}`}
                       type="button"
                       disabled={submitting}
-                      onClick={() => toggleOption(idx, opt.label, !!isMulti)}
+                      onClick={() => toggleOption(idx, opt.label, !!q.multiple)}
                       className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors ${
                         isSelected
                           ? "border-primary bg-primary/10 text-primary"
@@ -428,8 +313,8 @@ function QuestionAnswerForm({
                       } ${submitting ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
                     >
                       <span>{opt.label}</span>
-                      {opt.recommended && (
-                        <span className="text-[9px] uppercase text-primary/70">rec</span>
+                      {opt.description && (
+                        <span className="opacity-60"> - {opt.description}</span>
                       )}
                     </button>
                   );
@@ -437,7 +322,7 @@ function QuestionAnswerForm({
               </div>
             )}
 
-            {(!q.options || q.options.length === 0 || q.allowFreeformInput) && (
+            {(q.options.length === 0 || q.custom) && (
               <input
                 type="text"
                 disabled={submitting}
@@ -450,7 +335,7 @@ function QuestionAnswerForm({
               />
             )}
 
-            {isMulti && (
+            {q.multiple && (
               <div className="text-[11px] text-warning/90">
                 You can select more than one option
               </div>
@@ -482,7 +367,7 @@ function PermissionRequestForm({
   port,
   onResolved,
 }: {
-  permission: PendingPermission;
+  permission: PermissionRequest;
   port: number;
   onResolved: (requestId: string) => void;
 }) {
@@ -516,7 +401,7 @@ function PermissionRequestForm({
     }
   };
 
-  const firstPattern = permission.patterns?.[0];
+  const firstPattern = permission.patterns[0];
 
   return (
     <div className="mt-2 rounded-md border border-warning/50 bg-warning/10 px-3 py-2 text-xs space-y-2">
@@ -608,51 +493,42 @@ const ToolCallItem = memo(function ToolCallItem({
           />
         ) : (
           <div className="mt-2 space-y-2 text-fg/90">
-            {questions.map((q, idx) => {
-              const isMulti = q.multiSelect || q.multiple;
+            {questions.map((q, idx) => (
+              <div key={`${part.callID || part.id}-q-${idx}`} className="space-y-1">
+                {(q.header || q.multiple) && (
+                  <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-fg">
+                    {q.header && <span>{q.header}</span>}
+                    {q.multiple && (
+                      <span className="rounded border border-warning/50 bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">
+                        Multi-select
+                      </span>
+                    )}
+                  </div>
+                )}
+                <p className="text-xs leading-relaxed">{q.question}</p>
 
-              return (
-                <div key={`${part.callID || part.id}-q-${idx}`} className="space-y-1">
-                  {(q.header || isMulti) && (
-                    <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-fg">
-                      {q.header && <span>{q.header}</span>}
-                      {isMulti && (
-                        <span className="rounded border border-warning/50 bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">
-                          Multi-select
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  <p className="text-xs leading-relaxed">{q.question}</p>
+                {q.options.length > 0 && (
+                  <ul className="space-y-1 ml-3 list-disc text-muted-fg">
+                    {q.options.map((opt, optIdx) => (
+                      <li key={`opt-${idx}-${optIdx}`}>
+                        <span className="text-fg">{opt.label}</span>
+                        {opt.description && (
+                          <span className="text-muted-fg"> - {opt.description}</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
 
-                  {q.options && q.options.length > 0 && (
-                    <ul className="space-y-1 ml-3 list-disc text-muted-fg">
-                      {q.options.map((opt, optIdx) => (
-                        <li key={`opt-${idx}-${optIdx}`}>
-                          <span className="text-fg">{opt.label}</span>
-                          {opt.recommended && (
-                            <span className="ml-1 text-[10px] uppercase text-primary/90">
-                              Recommended
-                            </span>
-                          )}
-                          {opt.description && (
-                            <span className="text-muted-fg"> - {opt.description}</span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-
-                  {(isMulti || q.allowFreeformInput) && (
-                    <div className="text-[11px] text-muted-fg">
-                      {isMulti && "You can select multiple options"}
-                      {isMulti && q.allowFreeformInput && " | "}
-                      {q.allowFreeformInput && "Freeform input allowed"}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                {(q.multiple || q.custom) && (
+                  <div className="text-[11px] text-muted-fg">
+                    {q.multiple && "You can select multiple options"}
+                    {q.multiple && q.custom && " | "}
+                    {q.custom && "Custom answer allowed"}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -689,7 +565,7 @@ const MessageItem = memo(function MessageItem({
   message: MessageWithParts;
   port: number;
   sessionId: string;
-  pendingPermissions: PendingPermission[];
+  pendingPermissions: PermissionRequest[];
   onPermissionResolved: (requestId: string) => void;
 }) {
   const textContent = getMessageContent(message.parts);
@@ -786,7 +662,7 @@ function SessionPage() {
   const [sending, setSending] = useState(false);
   const [messageQueue, setMessageQueue] = useState<QueuedMessage[]>([]);
   const [pendingPermissions, setPendingPermissions] = useState<
-    PendingPermission[]
+    PermissionRequest[]
   >([]);
   const [hasScrolledInitially, setHasScrolledInitially] = useState(false);
   const [fileResults, setFileResults] = useState<string[]>([]);
@@ -809,11 +685,10 @@ function SessionPage() {
     try {
       const response = await fetch(`/api/opencode/${port}/permissions`);
       if (!response.ok) return;
-      const data = await response.json();
-      const parsed = parsePendingPermissions(data).filter(
-        (item) => item.sessionID === sessionId,
+      const data = (await response.json()) as PermissionRequest[];
+      setPendingPermissions(
+        data.filter((item) => item.sessionID === sessionId),
       );
-      setPendingPermissions(parsed);
     } catch {
       // Keep current UI state on transient permission polling failures.
     }
