@@ -160,7 +160,7 @@ function parseToolQuestions(part: ToolPart): ToolQuestionInput[] {
       const question = String(item.question || "");
       const lowerQuestion = question.toLowerCase();
 
-      const inferredFreeformFromText = /(free\s?form|open\s?answer|open[-\s]?ended|risposta\s+aperta|risposta\s+libera|testo\s+libero|scrivi|altra\s+risposta|other)/.test(
+      const inferredFreeformFromText = /(free\s?form|open\s?answer|open[-\s]?ended|other(\s+answer)?|custom\s+answer|text\s+input|write|type\s+your\s+answer)/.test(
         lowerQuestion,
       );
 
@@ -183,7 +183,7 @@ function parseToolQuestions(part: ToolPart): ToolQuestionInput[] {
       const allowFreeformInput =
         explicitFreeform !== undefined
           ? explicitFreeform
-          : inferredFreeformFromText || true;
+          : inferredFreeformFromText;
 
       const options = Array.isArray(item.options)
         ? item.options
@@ -405,7 +405,7 @@ function QuestionAnswerForm({
                 {q.header && <span>{q.header}</span>}
                 {isMulti && (
                   <span className="rounded border border-warning/50 bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">
-                    Selezione multipla
+                    Multi-select
                   </span>
                 )}
               </div>
@@ -453,7 +453,7 @@ function QuestionAnswerForm({
 
             {isMulti && (
               <div className="text-[11px] text-warning/90">
-                Puoi selezionare piu di una opzione
+                You can select more than one option
               </div>
             )}
           </div>
@@ -619,7 +619,7 @@ const ToolCallItem = memo(function ToolCallItem({
                       {q.header && <span>{q.header}</span>}
                       {isMulti && (
                         <span className="rounded border border-warning/50 bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">
-                          Selezione multipla
+                          Multi-select
                         </span>
                       )}
                     </div>
@@ -646,7 +646,7 @@ const ToolCallItem = memo(function ToolCallItem({
 
                   {(isMulti || q.allowFreeformInput) && (
                     <div className="text-[11px] text-muted-fg">
-                      {isMulti && "Puoi selezionare piu opzioni"}
+                      {isMulti && "You can select multiple options"}
                       {isMulti && q.allowFreeformInput && " | "}
                       {q.allowFreeformInput && "Freeform input allowed"}
                     </div>
