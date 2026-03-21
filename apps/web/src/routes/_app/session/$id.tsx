@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState, useCallback, memo } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo, memo } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Ripples } from "ldrs/react";
@@ -175,6 +175,55 @@ function formatToolCall(part: ToolPart): {
       };
     }
   }
+}
+
+function QuestionDisplay({
+  questions,
+  partKey,
+}: {
+  questions: QuestionInfo[];
+  partKey: string;
+}) {
+  return (
+    <>
+      {questions.map((q, idx) => (
+        <div key={`${partKey}-q-${idx}`} className="space-y-1">
+          {(q.header || q.multiple) && (
+            <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-fg">
+              {q.header && <span>{q.header}</span>}
+              {q.multiple && (
+                <span className="rounded border border-warning/50 bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">
+                  Multi-select
+                </span>
+              )}
+            </div>
+          )}
+          <p className="text-xs leading-relaxed">{q.question}</p>
+
+          {q.options.length > 0 && (
+            <ul className="space-y-1 ml-3 list-disc text-muted-fg">
+              {q.options.map((opt, optIdx) => (
+                <li key={`opt-${idx}-${optIdx}`}>
+                  <span className="text-fg">{opt.label}</span>
+                  {opt.description && (
+                    <span className="text-muted-fg"> - {opt.description}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {(q.multiple || q.custom) && (
+            <div className="text-[11px] text-muted-fg">
+              {q.multiple && "You can select multiple options"}
+              {q.multiple && q.custom && " | "}
+              {q.custom && "Custom answer allowed"}
+            </div>
+          )}
+        </div>
+      ))}
+    </>
+  );
 }
 
 function getMessageContent(parts: Part[]): string {
@@ -493,42 +542,10 @@ const ToolCallItem = memo(function ToolCallItem({
           />
         ) : (
           <div className="mt-2 space-y-2 text-fg/90">
-            {questions.map((q, idx) => (
-              <div key={`${part.callID || part.id}-q-${idx}`} className="space-y-1">
-                {(q.header || q.multiple) && (
-                  <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-fg">
-                    {q.header && <span>{q.header}</span>}
-                    {q.multiple && (
-                      <span className="rounded border border-warning/50 bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">
-                        Multi-select
-                      </span>
-                    )}
-                  </div>
-                )}
-                <p className="text-xs leading-relaxed">{q.question}</p>
-
-                {q.options.length > 0 && (
-                  <ul className="space-y-1 ml-3 list-disc text-muted-fg">
-                    {q.options.map((opt, optIdx) => (
-                      <li key={`opt-${idx}-${optIdx}`}>
-                        <span className="text-fg">{opt.label}</span>
-                        {opt.description && (
-                          <span className="text-muted-fg"> - {opt.description}</span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-
-                {(q.multiple || q.custom) && (
-                  <div className="text-[11px] text-muted-fg">
-                    {q.multiple && "You can select multiple options"}
-                    {q.multiple && q.custom && " | "}
-                    {q.custom && "Custom answer allowed"}
-                  </div>
-                )}
-              </div>
-            ))}
+            <QuestionDisplay
+              questions={questions}
+              partKey={part.callID || part.id}
+            />
           </div>
         )}
       </div>
@@ -714,7 +731,10 @@ function SessionPage() {
     return () => window.clearInterval(interval);
   }, [port, sessionId, refreshPendingPermissions]);
 
-  const visibleMessageIds = new Set(messages.map((m) => m.info.id));
+  const visibleMessageIds = useMemo(
+    () => new Set(messages.map((m) => m.info.id)),
+    [messages],
+  );
   const unlinkedPermissions = pendingPermissions.filter(
     (perm) => !perm.tool?.messageID || !visibleMessageIds.has(perm.tool.messageID),
   );
