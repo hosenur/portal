@@ -7,7 +7,7 @@ export default defineHandler(async (event) => {
   const id = parseRouteParam(event, "id");
 
   const client = getOpencodeClient(port);
-  const result = await client.session.delete({ path: { id } });
+  const result = await client.session.abort({ path: { id } });
 
   return result.data;
 });

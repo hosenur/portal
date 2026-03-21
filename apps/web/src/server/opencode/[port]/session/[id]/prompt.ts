@@ -1,66 +1,52 @@
-import { createError, defineHandler, getRouterParam, readBody } from "nitro/h3";
+import { z } from "zod/v4";
+import { HTTPError, defineHandler } from "nitro/h3";
 import { getOpencodeClient } from "../../../../lib/opencode-client";
+import { parsePort, parseRouteParam, parseBody } from "../../../../lib/validation";
 
-interface PromptBody {
-  text: string;
-  model?: {
-    providerID: string;
-    modelID: string;
-  };
-  agent?: string;
-}
+const promptBodySchema = z.object({
+  text: z.string().min(1),
+  model: z
+    .object({
+      providerID: z.string(),
+      modelID: z.string(),
+    })
+    .optional(),
+  agent: z.string().optional(),
+});
 
 export default defineHandler(async (event) => {
-  const port = Number(getRouterParam(event, "port"));
-  const id = getRouterParam(event, "id");
-
-  if (!port || isNaN(port)) {
-    throw new Error("Invalid port");
-  }
-
-  if (!id) {
-    throw new Error("Session ID required");
-  }
-
-  const body = await readBody<PromptBody>(event);
-
-  if (!body?.text) {
-    throw new Error("Message text required");
-  }
+  const port = parsePort(event);
+  const id = parseRouteParam(event, "id");
+  const body = await parseBody(event, promptBodySchema);
 
   const client = getOpencodeClient(port);
+  const promptBody = {
+    parts: [{ type: "text" as const, text: body.text }],
+    model: body.model,
+    agent: body.agent,
+  };
+
   try {
     const result = await client.session.prompt({
       path: { id },
-      body: {
-        parts: [{ type: "text", text: body.text }],
-        model: body.model,
-        agent: body.agent,
-      },
+      body: promptBody,
     });
-
     return result.data;
   } catch (error) {
     const isTimeout =
       error instanceof Error &&
-      (error.name === "TimeoutError" ||
-        error.message.toLowerCase().includes("timed out"));
+      (error.name === "TimeoutError" || error.cause instanceof DOMException);
 
     if (isTimeout) {
       const asyncResult = await client.session.promptAsync({
         path: { id },
-        body: {
-          parts: [{ type: "text", text: body.text }],
-          model: body.model,
-          agent: body.agent,
-        },
+        body: promptBody,
       });
       return asyncResult.data;
     }
 
-    throw createError({
-      statusCode: 500,
-      statusMessage: error instanceof Error ? error.message : "Prompt failed",
+    throw new HTTPError(error instanceof Error ? error.message : "Prompt failed", {
+      status: 500,
     });
   }
 });

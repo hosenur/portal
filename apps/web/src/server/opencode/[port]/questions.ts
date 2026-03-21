@@ -1,19 +1,11 @@
-import { defineHandler, getRouterParam } from "nitro/h3";
-import { getOpencodeBaseUrl } from "../../lib/opencode-client";
+import { defineHandler } from "nitro/h3";
+import { getOpencodeClientV2 } from "../../lib/opencode-client";
+import { parsePort } from "../../lib/validation";
 
 export default defineHandler(async (event) => {
-  const port = Number(getRouterParam(event, "port"));
+  const port = parsePort(event);
+  const client = getOpencodeClientV2(port);
+  const result = await client.question.list();
 
-  if (!port || isNaN(port)) {
-    throw new Error("Invalid port");
-  }
-
-  const baseUrl = getOpencodeBaseUrl(port);
-  const response = await fetch(`${baseUrl}/question`);
-
-  if (!response.ok) {
-    throw new Error(`Failed to list questions: ${response.statusText}`);
-  }
-
-  return response.json();
+  return result.data;
 });

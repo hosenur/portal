@@ -1,12 +1,13 @@
 import { createOpencodeClient } from "@opencode-ai/sdk";
+import { createOpencodeClient as createOpencodeClientV2 } from "@opencode-ai/sdk/v2/client";
 import { existsSync, readFileSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
 
 const CONFIG_PATH = join(homedir(), ".portal.json");
 
-// Cache clients by host:port
 const clientCache = new Map<string, ReturnType<typeof createOpencodeClient>>();
+const clientCacheV2 = new Map<string, ReturnType<typeof createOpencodeClientV2>>();
 
 function getHostnameForPort(port: number): string {
   try {
@@ -42,16 +43,31 @@ export function getOpencodeClient(port: number) {
   return client;
 }
 
-export function getOpencodeBaseUrl(port: number): string {
+export function getOpencodeClientV2(port: number) {
   const hostname = getHostnameForPort(port);
-  return `http://${hostname}:${port}`;
+  const key = `${hostname}:${port}`;
+
+  const cached = clientCacheV2.get(key);
+  if (cached) {
+    return cached;
+  }
+
+  const client = createOpencodeClientV2({
+    baseUrl: `http://${hostname}:${port}`,
+  });
+
+  clientCacheV2.set(key, client);
+  return client;
 }
 
 export function clearClientCache(port?: number) {
   if (port) {
     const hostname = getHostnameForPort(port);
-    clientCache.delete(`${hostname}:${port}`);
+    const key = `${hostname}:${port}`;
+    clientCache.delete(key);
+    clientCacheV2.delete(key);
   } else {
     clientCache.clear();
+    clientCacheV2.clear();
   }
 }

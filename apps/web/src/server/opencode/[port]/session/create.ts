@@ -1,22 +1,20 @@
-import { defineHandler, getRouterParam, readBody } from "nitro/h3";
+import { z } from "zod/v4";
+import { defineHandler } from "nitro/h3";
 import { getOpencodeClient } from "../../../lib/opencode-client";
+import { parsePort, parseBody } from "../../../lib/validation";
 
-interface CreateSessionBody {
-  title?: string;
-  parentID?: string;
-}
+const createSessionSchema = z.object({
+  title: z.string().optional(),
+  parentID: z.string().optional(),
+});
 
 export default defineHandler(async (event) => {
-  const port = Number(getRouterParam(event, "port"));
+  const port = parsePort(event);
+  const body = await parseBody(event, createSessionSchema);
 
-  if (!port || isNaN(port)) {
-    throw new Error("Invalid port");
-  }
-
-  const body = await readBody<CreateSessionBody>(event);
   const client = getOpencodeClient(port);
   const session = await client.session.create({
-    body: { title: body?.title, parentID: body?.parentID },
+    body: { title: body.title, parentID: body.parentID },
   });
 
   return session.data;
