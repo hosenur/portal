@@ -678,6 +678,7 @@ function SessionPage() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [messageQueue, setMessageQueue] = useState<QueuedMessage[]>([]);
+  const [modelOverride, setModelOverride] = useState(false);
   const [pendingPermissions, setPendingPermissions] = useState<
     PermissionRequest[]
   >([]);
@@ -805,7 +806,7 @@ function SessionPage() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               text: messageText,
-              model: selectedModel,
+              model: modelOverride ? selectedModel : undefined,
               agent: selectedAgent,
             }),
           },
@@ -825,7 +826,7 @@ function SessionPage() {
         removeOptimisticMessage(port, sessionId, messageId);
       }
     },
-    [sessionId, port, mutateSessions, selectedModel, selectedAgent],
+    [sessionId, port, mutateSessions, selectedModel, selectedAgent, modelOverride],
   );
 
   const processQueue = useCallback(async () => {
@@ -1042,7 +1043,27 @@ function SessionPage() {
               <AgentSelect sessionId={sessionId} />
             </div>
             <div className="flex items-center justify-between gap-2 sm:justify-end">
-              <ModelSelect />
+              {modelOverride ? (
+                <div className="flex items-center gap-1.5">
+                  <ModelSelect />
+                  <button
+                    type="button"
+                    onClick={() => setModelOverride(false)}
+                    className="rounded-md px-1.5 py-1 text-xs text-muted-fg hover:text-fg transition-colors"
+                    title="Use default model"
+                  >
+                    &times;
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setModelOverride(true)}
+                  className="rounded-md border border-dashed border-border px-2.5 py-1.5 text-xs text-muted-fg hover:border-fg/30 hover:text-fg transition-colors cursor-pointer"
+                >
+                  Override default model
+                </button>
+              )}
               <Button
                 type="submit"
                 isDisabled={!input.trim()}
