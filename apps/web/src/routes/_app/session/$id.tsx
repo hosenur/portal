@@ -183,7 +183,7 @@ function parseToolQuestions(part: ToolPart): ToolQuestionInput[] {
       const allowFreeformInput =
         explicitFreeform !== undefined
           ? explicitFreeform
-          : inferredFreeformFromText || true;
+          : inferredFreeformFromText;
 
       const options = Array.isArray(item.options)
         ? item.options
