@@ -1,6 +1,6 @@
 {
   "name": "openportal",
-  "version": "0.1.26",
+  "version": "0.1.27",
   "license": "MIT",
   "type": "module",
   "repository": {
@@ -17,6 +17,7 @@
   "scripts": {
     "dev": "bun run src/index.ts",
     "build": "bun build src/index.ts --outdir dist --target bun",
+    "prepublishOnly": "bun run build",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
