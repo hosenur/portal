@@ -69,8 +69,13 @@ jobs:
 
       - name: Build CLI
         if: steps.version-check.outputs.changed == 'true'
-        run: bun run build
         working-directory: packages/cli
+        run: |
+          echo "bun version: $(bun --version)"
+          echo "Building CLI..."
+          bun build src/index.ts --outdir dist --target bun 2>&1
+          echo "Build exit code: $?"
+          ls -la dist/ || echo "dist/ directory not found"
 
       - name: Verify dist exists
         if: steps.version-check.outputs.changed == 'true'
