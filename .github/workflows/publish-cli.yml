@@ -72,6 +72,15 @@ jobs:
         run: bun run build
         working-directory: packages/cli
 
+      - name: Verify dist exists
+        if: steps.version-check.outputs.changed == 'true'
+        run: |
+          if [ ! -f packages/cli/dist/index.js ]; then
+            echo "❌ dist/index.js not found — build failed"
+            exit 1
+          fi
+          echo "✅ dist/index.js exists ($(wc -c < packages/cli/dist/index.js) bytes)"
+
       - name: Publish to npm
         if: steps.version-check.outputs.changed == 'true'
         run: npm publish --access public

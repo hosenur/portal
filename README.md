@@ -122,10 +122,13 @@ This portal is designed for remote access to your OpenCode instance. Deploy the 
 
 Contributions are welcome! Here's how you can help:
 
+### Feedback & Feature Requests
+
+Visit [oc-portal.userjot.com](https://oc-portal.userjot.com/) to submit feedback and feature requests.
+
 ### Reporting Issues
 
 - **Bugs**: Report bugs by opening an issue with a clear description and steps to reproduce
-- **Feature requests**: Open an issue with the `feature` label and describe the proposed enhancement
 
 ### Development Setup
 
