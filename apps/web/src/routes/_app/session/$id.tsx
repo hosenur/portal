@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState, useCallback, memo } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo, memo } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Ripples } from "ldrs/react";
@@ -34,6 +34,10 @@ import {
   type MessageWithParts,
   type Part,
   type ToolPart,
+  type PermissionRequest,
+  type QuestionAnswer,
+  type QuestionInfo,
+  type QuestionRequest,
 } from "@/hooks/use-session-messages";
 import { useSessions } from "@/hooks/use-opencode";
 import type { Session } from "@opencode-ai/sdk";
@@ -47,8 +51,52 @@ interface QueuedMessage {
   text: string;
 }
 
+type PermissionReply = "once" | "always" | "reject";
+
+
+
 function isToolPart(part: Part): part is ToolPart {
   return part.type === "tool";
+}
+
+function parseToolQuestions(part: ToolPart): QuestionInfo[] {
+  const input = (part.state?.input || {}) as Record<string, unknown>;
+  const rawQuestions = input.questions;
+
+  console.log("[parseToolQuestions] raw input:", JSON.stringify(input, null, 2));
+
+  if (!Array.isArray(rawQuestions)) {
+    return [];
+  }
+
+  return rawQuestions
+    .filter(
+      (item): item is Record<string, unknown> =>
+        typeof item === "object" && item !== null,
+    )
+    .map((item) => {
+      console.log("[parseToolQuestions] raw question item:", JSON.stringify(item, null, 2));
+      console.log("[parseToolQuestions] custom field:", item.custom, "type:", typeof item.custom);
+      return {
+        question: String(item.question || ""),
+        header: String(item.header || ""),
+        options: Array.isArray(item.options)
+          ? item.options
+              .filter(
+                (opt): opt is Record<string, unknown> =>
+                  typeof opt === "object" && opt !== null,
+              )
+              .map((opt) => ({
+                label: String(opt.label || ""),
+                description: String(opt.description || ""),
+              }))
+              .filter((opt) => !!opt.label)
+          : [],
+        multiple: Boolean(item.multiple),
+        custom: item.custom !== false,
+      };
+    })
+    .filter((q) => !!q.question);
 }
 
 function formatToolCall(part: ToolPart): {
@@ -129,6 +177,55 @@ function formatToolCall(part: ToolPart): {
   }
 }
 
+function QuestionDisplay({
+  questions,
+  partKey,
+}: {
+  questions: QuestionInfo[];
+  partKey: string;
+}) {
+  return (
+    <>
+      {questions.map((q, idx) => (
+        <div key={`${partKey}-q-${idx}`} className="space-y-1">
+          {(q.header || q.multiple) && (
+            <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-fg">
+              {q.header && <span>{q.header}</span>}
+              {q.multiple && (
+                <span className="rounded border border-warning/50 bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">
+                  Multi-select
+                </span>
+              )}
+            </div>
+          )}
+          <p className="text-xs leading-relaxed">{q.question}</p>
+
+          {q.options.length > 0 && (
+            <ul className="space-y-1 ml-3 list-disc text-muted-fg">
+              {q.options.map((opt, optIdx) => (
+                <li key={`opt-${idx}-${optIdx}`}>
+                  <span className="text-fg">{opt.label}</span>
+                  {opt.description && (
+                    <span className="text-muted-fg"> - {opt.description}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {(q.multiple || q.custom) && (
+            <div className="text-[11px] text-muted-fg">
+              {q.multiple && "You can select multiple options"}
+              {q.multiple && q.custom && " | "}
+              {q.custom && "Custom answer allowed"}
+            </div>
+          )}
+        </div>
+      ))}
+    </>
+  );
+}
+
 function getMessageContent(parts: Part[]): string {
   return parts
     .filter(
@@ -139,12 +236,321 @@ function getMessageContent(parts: Part[]): string {
     .join("\n\n");
 }
 
-const ToolCallItem = memo(function ToolCallItem({ part }: { part: ToolPart }) {
+function QuestionAnswerForm({
+  questions,
+  partKey,
+  port,
+  sessionId,
+  callID,
+}: {
+  questions: QuestionInfo[];
+  partKey: string;
+  port: number;
+  sessionId: string;
+  callID: string;
+}) {
+  const [selections, setSelections] = useState<Record<number, string[]>>({});
+  const [freeformInputs, setFreeformInputs] = useState<Record<number, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const toggleOption = (qIdx: number, label: string, isMulti: boolean) => {
+    setSelections((prev) => {
+      const current = prev[qIdx] || [];
+      if (isMulti) {
+        return {
+          ...prev,
+          [qIdx]: current.includes(label)
+            ? current.filter((l) => l !== label)
+            : [...current, label],
+        };
+      }
+      return { ...prev, [qIdx]: current.includes(label) ? [] : [label] };
+    });
+  };
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      // Fetch pending questions to get the requestID
+      const listRes = await fetch(`/api/opencode/${port}/questions`);
+      if (!listRes.ok) throw new Error("Failed to fetch pending questions");
+      const pendingQuestions = (await listRes.json()) as QuestionRequest[];
+
+      console.log("[handleSubmit] looking for sessionID:", sessionId, "callID:", callID);
+      console.log("[handleSubmit] pending questions:", JSON.stringify(pendingQuestions, null, 2));
+
+      // Match by callID first, then by sessionID as fallback
+      const match =
+        pendingQuestions.find((q) => q.tool?.callID === callID) ??
+        pendingQuestions.find((q) => q.sessionID === sessionId);
+
+      if (!match) {
+        throw new Error("Question request not found - it may have already been answered");
+      }
+
+      // Build answers array: one string[] per question
+      const answers: QuestionAnswer[] = questions.map((_, i) => {
+        const selected = selections[i] || [];
+        const freeform = freeformInputs[i]?.trim() || "";
+        if (selected.length > 0) return selected;
+        if (freeform) return [freeform];
+        return [];
+      });
+
+      const replyRes = await fetch(
+        `/api/opencode/${port}/question/${match.id}/reply`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ answers }),
+        },
+      );
+
+      if (!replyRes.ok) throw new Error("Failed to submit answers");
+
+      mutateSessionMessages(port, sessionId);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Failed to submit answers");
+      setSubmitting(false);
+    }
+  };
+
+  const hasAnswersForAllQuestions =
+    questions.length > 0 &&
+    questions.every((_, i) => {
+      const selected = selections[i] || [];
+      const freeform = freeformInputs[i]?.trim() || "";
+      return selected.length > 0 || freeform.length > 0;
+    });
+
+  return (
+    <div className="mt-2 space-y-3 text-fg/90">
+      {questions.map((q, idx) => {
+        const selected = selections[idx] || [];
+
+        return (
+          <div key={`${partKey}-q-${idx}`} className="space-y-1.5">
+            {(q.header || q.multiple) && (
+              <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-fg">
+                {q.header && <span>{q.header}</span>}
+                {q.multiple && (
+                  <span className="rounded border border-warning/50 bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">
+                    Multi-select
+                  </span>
+                )}
+              </div>
+            )}
+            <p className="text-xs leading-relaxed">{q.question}</p>
+
+            {q.options.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {q.options.map((opt, optIdx) => {
+                  const isSelected = selected.includes(opt.label);
+                  return (
+                    <button
+                      key={`opt-${idx}-${optIdx}`}
+                      type="button"
+                      disabled={submitting}
+                      onClick={() => toggleOption(idx, opt.label, !!q.multiple)}
+                      className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors ${
+                        isSelected
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border bg-bg hover:border-fg/30 text-fg/80"
+                      } ${submitting ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                    >
+                      <span>{opt.label}</span>
+                      {opt.description && (
+                        <span className="opacity-60"> - {opt.description}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {(q.options.length === 0 || q.custom) && (
+              <input
+                type="text"
+                disabled={submitting}
+                placeholder="Type your answer..."
+                value={freeformInputs[idx] || ""}
+                onChange={(e) =>
+                  setFreeformInputs((prev) => ({ ...prev, [idx]: e.target.value }))
+                }
+                className="w-full rounded-md border border-border bg-bg px-2 py-1 text-xs text-fg placeholder:text-muted-fg focus:outline-none focus:border-primary"
+              />
+            )}
+
+            {q.multiple && (
+              <div className="text-[11px] text-warning/90">
+                You can select more than one option
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {submitError && (
+        <div className="text-[11px] text-danger">{submitError}</div>
+      )}
+
+      <Button
+        type="button"
+        size="sm"
+        isDisabled={!hasAnswersForAllQuestions || submitting}
+        onPress={handleSubmit}
+        className="mt-1"
+      >
+        <SendIcon size="12px" />
+        {submitting ? "Sending..." : "Submit Answers"}
+      </Button>
+    </div>
+  );
+}
+
+function PermissionRequestForm({
+  permission,
+  port,
+  onResolved,
+}: {
+  permission: PermissionRequest;
+  port: number;
+  onResolved: (requestId: string) => void;
+}) {
+  const [submitting, setSubmitting] = useState<PermissionReply | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const handleReply = async (reply: PermissionReply) => {
+    setSubmitting(reply);
+    setSubmitError(null);
+
+    try {
+      const response = await fetch(
+        `/api/opencode/${port}/permission/${permission.id}/reply`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reply }),
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to reply to permission request");
+      }
+
+      onResolved(permission.id);
+    } catch (err) {
+      setSubmitError(
+        err instanceof Error ? err.message : "Failed to reply to permission",
+      );
+      setSubmitting(null);
+    }
+  };
+
+  const firstPattern = permission.patterns[0];
+
+  return (
+    <div className="mt-2 rounded-md border border-warning/50 bg-warning/10 px-3 py-2 text-xs space-y-2">
+      <div className="font-medium text-warning">Permission required</div>
+      <div className="text-fg/90">
+        Tool requests <span className="font-mono">{permission.permission}</span>
+      </div>
+      {firstPattern && (
+        <div className="text-muted-fg break-all">
+          Path: <span className="font-mono">{firstPattern}</span>
+        </div>
+      )}
+      <div className="flex flex-wrap gap-1.5 pt-0.5">
+        <Button
+          type="button"
+          size="sm"
+          isDisabled={!!submitting}
+          onPress={() => handleReply("once")}
+        >
+          {submitting === "once" ? "Allowing..." : "Allow once"}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          isDisabled={!!submitting}
+          onPress={() => handleReply("always")}
+          className="bg-success/20 text-success hover:bg-success/25"
+        >
+          {submitting === "always" ? "Saving..." : "Allow always"}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          isDisabled={!!submitting}
+          onPress={() => handleReply("reject")}
+          className="bg-danger/20 text-danger hover:bg-danger/25"
+        >
+          {submitting === "reject" ? "Rejecting..." : "Reject"}
+        </Button>
+      </div>
+      {submitError && <div className="text-danger">{submitError}</div>}
+    </div>
+  );
+}
+
+const ToolCallItem = memo(function ToolCallItem({
+  part,
+  port,
+  sessionId,
+}: {
+  part: ToolPart;
+  port: number;
+  sessionId: string;
+}) {
   const { icon, label, details } = formatToolCall(part);
+  const isQuestionTool = (part.tool || "").toLowerCase() === "question";
+  const questions = isQuestionTool ? parseToolQuestions(part) : [];
+  const hasQuestions = questions.length > 0;
   const isCompleted = part.state.status === "completed";
   const isError = part.state.status === "error";
   const isPending =
     part.state.status === "pending" || part.state.status === "running";
+
+  if (hasQuestions) {
+    return (
+      <div
+        className={`rounded-md border px-3 py-2 text-xs ${
+          isError
+            ? "border-danger/40 bg-danger-subtle/30"
+            : isCompleted
+              ? "border-border bg-muted/25"
+              : "border-warning/40 bg-warning/10"
+        }`}
+      >
+        <div className="font-mono text-xs flex items-center gap-1.5 min-w-0">
+          <span className="opacity-60 shrink-0">{icon}</span>
+          <span className="truncate">{label}</span>
+          {details && <span className="opacity-60 shrink-0">{details}</span>}
+          {isPending && <span className="animate-pulse shrink-0">...</span>}
+        </div>
+
+        {isPending && port ? (
+          <QuestionAnswerForm
+            questions={questions}
+            partKey={part.callID || part.id}
+            port={port}
+            sessionId={sessionId}
+            callID={part.callID || ""}
+          />
+        ) : (
+          <div className="mt-2 space-y-2 text-fg/90">
+            <QuestionDisplay
+              questions={questions}
+              partKey={part.callID || part.id}
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -168,12 +574,23 @@ const ToolCallItem = memo(function ToolCallItem({ part }: { part: ToolPart }) {
 
 const MessageItem = memo(function MessageItem({
   message,
+  port,
+  sessionId,
+  pendingPermissions,
+  onPermissionResolved,
 }: {
   message: MessageWithParts;
+  port: number;
+  sessionId: string;
+  pendingPermissions: PermissionRequest[];
+  onPermissionResolved: (requestId: string) => void;
 }) {
   const textContent = getMessageContent(message.parts);
   const isAssistant = message.info.role === "assistant";
   const toolCalls = message.parts.filter(isToolPart);
+  const messagePermissions = pendingPermissions.filter(
+    (perm) => perm.tool?.messageID === message.info.id,
+  );
 
   return (
     <div className="py-3 px-6">
@@ -201,7 +618,24 @@ const MessageItem = memo(function MessageItem({
       {toolCalls.length > 0 && (
         <div className={`${textContent ? "mt-2 ml-6" : ""} space-y-0.5`}>
           {toolCalls.map((part) => (
-            <ToolCallItem key={part.callID || part.id} part={part} />
+            <ToolCallItem
+              key={part.callID || part.id}
+              part={part}
+              port={port}
+              sessionId={sessionId}
+            />
+          ))}
+        </div>
+      )}
+      {messagePermissions.length > 0 && (
+        <div className={`${textContent ? "mt-2 ml-6" : ""} space-y-2`}>
+          {messagePermissions.map((permission) => (
+            <PermissionRequestForm
+              key={permission.id}
+              permission={permission}
+              port={port}
+              onResolved={onPermissionResolved}
+            />
           ))}
         </div>
       )}
@@ -244,6 +678,10 @@ function SessionPage() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [messageQueue, setMessageQueue] = useState<QueuedMessage[]>([]);
+  const [modelOverride, setModelOverride] = useState(false);
+  const [pendingPermissions, setPendingPermissions] = useState<
+    PermissionRequest[]
+  >([]);
   const [hasScrolledInitially, setHasScrolledInitially] = useState(false);
   const [fileResults, setFileResults] = useState<string[]>([]);
   const isProcessingQueue = useRef(false);
@@ -255,6 +693,52 @@ function SessionPage() {
   const fileMention = useFileMention();
 
   const error = messagesError?.message || sendError;
+
+  const refreshPendingPermissions = useCallback(async () => {
+    if (!port || !sessionId) {
+      setPendingPermissions([]);
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/opencode/${port}/permissions`);
+      if (!response.ok) return;
+      const data = (await response.json()) as PermissionRequest[];
+      setPendingPermissions(
+        data.filter((item) => item.sessionID === sessionId),
+      );
+    } catch {
+      // Keep current UI state on transient permission polling failures.
+    }
+  }, [port, sessionId]);
+
+  const handlePermissionResolved = useCallback(
+    (requestId: string) => {
+      setPendingPermissions((prev) => prev.filter((p) => p.id !== requestId));
+      if (port && sessionId) {
+        mutateSessionMessages(port, sessionId);
+      }
+      refreshPendingPermissions();
+    },
+    [port, sessionId, refreshPendingPermissions],
+  );
+
+  useEffect(() => {
+    refreshPendingPermissions();
+
+    if (!port || !sessionId) return;
+
+    const interval = window.setInterval(refreshPendingPermissions, 2000);
+    return () => window.clearInterval(interval);
+  }, [port, sessionId, refreshPendingPermissions]);
+
+  const visibleMessageIds = useMemo(
+    () => new Set(messages.map((m) => m.info.id)),
+    [messages],
+  );
+  const unlinkedPermissions = pendingPermissions.filter(
+    (perm) => !perm.tool?.messageID || !visibleMessageIds.has(perm.tool.messageID),
+  );
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -322,7 +806,7 @@ function SessionPage() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               text: messageText,
-              model: selectedAgent ? undefined : selectedModel,
+              model: modelOverride ? selectedModel : undefined,
               agent: selectedAgent,
             }),
           },
@@ -342,7 +826,7 @@ function SessionPage() {
         removeOptimisticMessage(port, sessionId, messageId);
       }
     },
-    [sessionId, port, mutateSessions, selectedModel, selectedAgent],
+    [sessionId, port, mutateSessions, selectedModel, selectedAgent, modelOverride],
   );
 
   const processQueue = useCallback(async () => {
@@ -449,8 +933,27 @@ function SessionPage() {
           {messages
             .filter((message) => hasVisibleContent(message))
             .map((message) => (
-              <MessageItem key={message.info.id} message={message} />
+              <MessageItem
+                key={message.info.id}
+                message={message}
+                port={port}
+                sessionId={sessionId}
+                pendingPermissions={pendingPermissions}
+                onPermissionResolved={handlePermissionResolved}
+              />
             ))}
+          {unlinkedPermissions.length > 0 && (
+            <div className="px-6 py-4 space-y-2 border-t border-dashed border-border">
+              {unlinkedPermissions.map((permission) => (
+                <PermissionRequestForm
+                  key={permission.id}
+                  permission={permission}
+                  port={port}
+                  onResolved={handlePermissionResolved}
+                />
+              ))}
+            </div>
+          )}
           <div ref={messagesEndRef} />
         </div>
 
@@ -540,7 +1043,27 @@ function SessionPage() {
               <AgentSelect sessionId={sessionId} />
             </div>
             <div className="flex items-center justify-between gap-2 sm:justify-end">
-              {!selectedAgent && <ModelSelect />}
+              {modelOverride ? (
+                <div className="flex items-center gap-1.5">
+                  <ModelSelect />
+                  <button
+                    type="button"
+                    onClick={() => setModelOverride(false)}
+                    className="rounded-md px-1.5 py-1 text-xs text-muted-fg hover:text-fg transition-colors"
+                    title="Use default model"
+                  >
+                    &times;
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setModelOverride(true)}
+                  className="rounded-md border border-dashed border-border px-2.5 py-1.5 text-xs text-muted-fg hover:border-fg/30 hover:text-fg transition-colors cursor-pointer"
+                >
+                  Override default model
+                </button>
+              )}
               <Button
                 type="submit"
                 isDisabled={!input.trim()}
