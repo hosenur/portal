@@ -679,6 +679,7 @@ function SessionPage() {
   const [sending, setSending] = useState(false);
   const [messageQueue, setMessageQueue] = useState<QueuedMessage[]>([]);
   const [modelOverride, setModelOverride] = useState(false);
+  const [viewingMode, setViewingMode] = useState(false);
   const [pendingPermissions, setPendingPermissions] = useState<
     PermissionRequest[]
   >([]);
@@ -967,7 +968,21 @@ function SessionPage() {
         )}
       </div>
 
-      <div className="border-t border-border p-4 shrink-0 relative">
+      <div className="border-t border-border shrink-0">
+        {viewingMode ? (
+          <div className="p-2 flex justify-end">
+            <button
+              type="button"
+              onClick={() => setViewingMode(false)}
+              className="rounded-md px-2.5 py-1.5 text-xs text-muted-fg hover:text-fg transition-colors flex items-center gap-1.5"
+              title="Exit view mode"
+            >
+              <IconEye size="14px" />
+              Exit view mode
+            </button>
+          </div>
+        ) : (
+        <div className="p-4 relative">
         <FileMentionPopover
           isOpen={fileMention.isOpen}
           searchQuery={fileMention.searchQuery}
@@ -1041,6 +1056,15 @@ function SessionPage() {
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center justify-between gap-2 sm:justify-start">
               <AgentSelect sessionId={sessionId} />
+              <button
+                type="button"
+                onClick={() => setViewingMode(true)}
+                className="rounded-md px-2 py-1 text-xs text-muted-fg hover:text-fg transition-colors flex items-center gap-1"
+                title="Switch to view mode"
+              >
+                <IconEye size="12px" />
+                View mode
+              </button>
             </div>
             <div className="flex items-center justify-between gap-2 sm:justify-end">
               {modelOverride ? (
@@ -1075,6 +1099,8 @@ function SessionPage() {
             </div>
           </div>
         </form>
+        </div>
+        )}
       </div>
     </div>
   );
