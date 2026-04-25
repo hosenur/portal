@@ -60,6 +60,23 @@ export function getOpencodeClientV2(port: number) {
   return client;
 }
 
+export function getOpencodeBaseUrl(port: number): string {
+  return `http://${getHostnameForPort(port)}:${port}`;
+}
+
+export function getInstanceDirectory(port: number): string | undefined {
+  try {
+    if (existsSync(CONFIG_PATH)) {
+      const config = JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
+      const instance = config.instances?.find(
+        (i: { opencodePort: number }) => i.opencodePort === port,
+      );
+      return instance?.directory;
+    }
+  } catch {}
+  return undefined;
+}
+
 export function clearClientCache(port?: number) {
   if (port) {
     const hostname = getHostnameForPort(port);
