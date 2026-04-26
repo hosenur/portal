@@ -1,6 +1,14 @@
 #!/usr/bin/env bun
 
-import { existsSync, readFileSync, writeFileSync } from "fs";
+import {
+  closeSync,
+  existsSync,
+  openSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+  writeSync,
+} from "fs";
 import { getPort } from "get-port-please";
 import { homedir } from "os";
 import { join, resolve, dirname } from "path";
@@ -9,6 +17,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const CONFIG_PATH = join(homedir(), ".portal.json");
+const CONFIG_LOCK_PATH = `${CONFIG_PATH}.lock`;
 const DEFAULT_HOSTNAME = "0.0.0.0";
 const DEFAULT_PORT = 3000;
 const DEFAULT_OPENCODE_PORT = 4000;
@@ -53,6 +62,73 @@ function readConfig(): PortalConfig {
 
 function writeConfig(config: PortalConfig): void {
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
+}
+
+// Acquire an exclusive advisory lock on ~/.portal.json by atomically creating
+// ~/.portal.json.lock with O_CREAT|O_EXCL ('wx' in Node). Stores the holder's
+// pid so a subsequent caller can detect and steal a stale lock left behind by
+// a process that crashed before releasing it.
+function acquireConfigLock(timeoutMs = 30_000): () => void {
+  const start = Date.now();
+  // 50ms initial backoff, capped at 250ms.
+  let backoff = 50;
+  while (true) {
+    try {
+      const fd = openSync(CONFIG_LOCK_PATH, "wx");
+      writeSync(fd, String(process.pid));
+      closeSync(fd);
+      return () => {
+        try {
+          unlinkSync(CONFIG_LOCK_PATH);
+        } catch {
+          // Already removed (e.g. by a stale-lock stealer); not our problem.
+        }
+      };
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+      if (tryStealStaleLock()) continue;
+      if (Date.now() - start > timeoutMs) {
+        throw new Error(
+          `Could not acquire ${CONFIG_LOCK_PATH} within ${timeoutMs}ms.`,
+        );
+      }
+      // Synchronous sleep; CLI is single-threaded and we want simple semantics.
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, backoff);
+      backoff = Math.min(backoff * 2, 250);
+    }
+  }
+}
+
+function tryStealStaleLock(): boolean {
+  let holderPid: number;
+  try {
+    holderPid = parseInt(readFileSync(CONFIG_LOCK_PATH, "utf-8"), 10);
+  } catch {
+    // Lock file vanished while we were inspecting it; whoever held it released.
+    return true;
+  }
+  if (!Number.isFinite(holderPid) || holderPid <= 0) return false;
+  if (isProcessRunning(holderPid)) return false;
+  // Holder is dead; remove the corpse so the next loop iteration can lock.
+  try {
+    unlinkSync(CONFIG_LOCK_PATH);
+  } catch {}
+  return true;
+}
+
+// Atomically read, mutate, and write ~/.portal.json. The mutator runs while
+// the file lock is held, so concurrent CLI invocations cannot lose updates.
+// Use this for any code path that wants to add, remove, or amend an instance.
+function mutateConfig<T>(mutator: (config: PortalConfig) => T): T {
+  const release = acquireConfigLock();
+  try {
+    const config = readConfig();
+    const result = mutator(config);
+    writeConfig(config);
+    return result;
+  } finally {
+    release();
+  }
 }
 
 function generateId(): string {
@@ -203,30 +279,21 @@ async function cmdDefault(
     ? parseInt(options["opencode-port"] as string, 10)
     : await getPort({ host: hostname, port: DEFAULT_OPENCODE_PORT });
 
-  const config = readConfig();
-
-  const existingIndex = config.instances.findIndex(
-    (i) => i.directory === directory,
-  );
-  if (existingIndex !== -1) {
-    const existing = config.instances[existingIndex];
-    const running = isInstanceRunning(existing);
-    if (running || isProcessRunning(existing.webPid)) {
-      console.log(`OpenPortal is already running for this directory.`);
-      console.log(`  Name: ${existing.name}`);
-      console.log(`  Web UI Port: ${existing.port ?? "N/A"}`);
-      console.log(`  OpenCode Port: ${existing.opencodePort}`);
-      if (existing.port) {
-        console.log(
-          `\n📱 Access OpenPortal at http://${hostname === "0.0.0.0" ? "localhost" : hostname}:${existing.port}`,
-        );
-      }
+  const existing = readConfig().instances.find((i) => i.directory === directory);
+  if (existing && isInstanceRunning(existing)) {
+    console.log(`OpenPortal is already running for this directory.`);
+    console.log(`  Name: ${existing.name}`);
+    console.log(`  Web UI Port: ${existing.port ?? "N/A"}`);
+    console.log(`  OpenCode Port: ${existing.opencodePort}`);
+    if (existing.port) {
       console.log(
-        `🔧 OpenCode API at http://${hostname === "0.0.0.0" ? "localhost" : hostname}:${existing.opencodePort}`,
+        `\n📱 Access OpenPortal at http://${hostname === "0.0.0.0" ? "localhost" : hostname}:${existing.port}`,
       );
-      return;
     }
-    config.instances.splice(existingIndex, 1);
+    console.log(
+      `🔧 OpenCode API at http://${hostname === "0.0.0.0" ? "localhost" : hostname}:${existing.opencodePort}`,
+    );
+    return;
   }
 
   if (!existsSync(WEB_SERVER_PATH)) {
@@ -262,8 +329,12 @@ async function cmdDefault(
       startedAt: new Date().toISOString(),
     };
 
-    config.instances.push(instance);
-    writeConfig(config);
+    mutateConfig((config) => {
+      config.instances = config.instances.filter(
+        (i) => i.directory !== directory,
+      );
+      config.instances.push(instance);
+    });
 
     const displayHost = hostname === "0.0.0.0" ? "localhost" : hostname;
 
@@ -291,24 +362,15 @@ async function cmdRun(options: Record<string, string | boolean | undefined>) {
     ? parseInt(options["opencode-port"] as string, 10)
     : await getPort({ host: hostname, port: DEFAULT_OPENCODE_PORT });
 
-  const config = readConfig();
-
-  const existingIndex = config.instances.findIndex(
-    (i) => i.directory === directory,
-  );
-  if (existingIndex !== -1) {
-    const existing = config.instances[existingIndex];
-    const running = isInstanceRunning(existing);
-    if (running) {
-      console.log(`OpenCode is already running for this directory.`);
-      console.log(`  Name: ${existing.name}`);
-      console.log(`  OpenCode Port: ${existing.opencodePort}`);
-      console.log(
-        `🔧 OpenCode API at http://${hostname === "0.0.0.0" ? "localhost" : hostname}:${existing.opencodePort}`,
-      );
-      return;
-    }
-    config.instances.splice(existingIndex, 1);
+  const existing = readConfig().instances.find((i) => i.directory === directory);
+  if (existing && isInstanceRunning(existing)) {
+    console.log(`OpenCode is already running for this directory.`);
+    console.log(`  Name: ${existing.name}`);
+    console.log(`  OpenCode Port: ${existing.opencodePort}`);
+    console.log(
+      `🔧 OpenCode API at http://${hostname === "0.0.0.0" ? "localhost" : hostname}:${existing.opencodePort}`,
+    );
+    return;
   }
 
   console.log(`Starting OpenCode server...`);
@@ -336,8 +398,12 @@ async function cmdRun(options: Record<string, string | boolean | undefined>) {
       startedAt: new Date().toISOString(),
     };
 
-    config.instances.push(instance);
-    writeConfig(config);
+    mutateConfig((config) => {
+      config.instances = config.instances.filter(
+        (i) => i.directory !== directory,
+      );
+      config.instances.push(instance);
+    });
 
     const displayHost = hostname === "0.0.0.0" ? "localhost" : hostname;
 
@@ -353,42 +419,44 @@ async function cmdRun(options: Record<string, string | boolean | undefined>) {
 }
 
 async function cmdStop(options: Record<string, string | boolean | undefined>) {
-  const config = readConfig();
   const directory =
     options.directory || options.d
       ? resolve((options.directory as string) || (options.d as string))
       : process.cwd();
 
-  const instance = options.name
-    ? config.instances.find((i) => i.name === options.name)
-    : config.instances.find((i) => i.directory === directory);
+  const removed = mutateConfig((config) => {
+    const instance = options.name
+      ? config.instances.find((i) => i.name === options.name)
+      : config.instances.find((i) => i.directory === directory);
+    if (!instance) return null;
+    config.instances = config.instances.filter((i) => i.id !== instance.id);
+    return instance;
+  });
 
-  if (!instance) {
+  if (!removed) {
     console.error("No instance found.");
     process.exit(1);
   }
 
-  if (instance.opencodePid !== null) {
+  if (removed.opencodePid !== null) {
     try {
-      process.kill(instance.opencodePid, "SIGTERM");
-      console.log(`Stopped OpenCode (PID: ${instance.opencodePid})`);
+      process.kill(removed.opencodePid, "SIGTERM");
+      console.log(`Stopped OpenCode (PID: ${removed.opencodePid})`);
     } catch {
       console.log("OpenCode was already stopped.");
     }
   }
 
-  if (instance.webPid !== null) {
+  if (removed.webPid !== null) {
     try {
-      process.kill(instance.webPid, "SIGTERM");
-      console.log(`Stopped Web UI (PID: ${instance.webPid})`);
+      process.kill(removed.webPid, "SIGTERM");
+      console.log(`Stopped Web UI (PID: ${removed.webPid})`);
     } catch {
       console.log("Web UI was already stopped.");
     }
   }
 
-  config.instances = config.instances.filter((i) => i.id !== instance.id);
-  writeConfig(config);
-  console.log(`\nStopped: ${instance.name}`);
+  console.log(`\nStopped: ${removed.name}`);
 }
 
 async function cmdList() {
@@ -403,7 +471,7 @@ async function cmdList() {
   console.log("ID\t\tNAME\t\t\tPORT\tOPENCODE\tSTATUS\t\tDIRECTORY");
   console.log("-".repeat(110));
 
-  const validInstances: PortalInstance[] = [];
+  const liveIds = new Set<string>();
 
   for (const instance of config.instances) {
     const opencodeRunning = isProcessRunning(instance.opencodePid);
@@ -415,7 +483,7 @@ async function cmdList() {
     else if (webRunning) status = "web only";
 
     if (opencodeRunning || webRunning) {
-      validInstances.push(instance);
+      liveIds.add(instance.id);
     }
 
     const portDisplay = instance.port ?? "-";
@@ -424,28 +492,34 @@ async function cmdList() {
     );
   }
 
-  if (validInstances.length !== config.instances.length) {
-    config.instances = validInstances;
-    writeConfig(config);
+  if (liveIds.size !== config.instances.length) {
+    mutateConfig((latest) => {
+      latest.instances = latest.instances.filter(
+        (i) => liveIds.has(i.id) || isInstanceRunning(i),
+      );
+    });
   }
 }
 
 async function cmdClean() {
-  const config = readConfig();
-  const validInstances: PortalInstance[] = [];
-
-  for (const instance of config.instances) {
-    const running = isInstanceRunning(instance);
-    if (running || isProcessRunning(instance.webPid)) {
-      validInstances.push(instance);
-    } else {
-      console.log(`Removed stale entry: ${instance.name}`);
+  const result = mutateConfig((config) => {
+    const valid: PortalInstance[] = [];
+    const removed: string[] = [];
+    for (const instance of config.instances) {
+      if (isInstanceRunning(instance)) {
+        valid.push(instance);
+      } else {
+        removed.push(instance.name);
+      }
     }
-  }
+    config.instances = valid;
+    return { valid, removed };
+  });
 
-  config.instances = validInstances;
-  writeConfig(config);
-  console.log(`\nConfig cleaned. ${validInstances.length} active instance(s).`);
+  for (const name of result.removed) {
+    console.log(`Removed stale entry: ${name}`);
+  }
+  console.log(`\nConfig cleaned. ${result.valid.length} active instance(s).`);
 }
 
 async function main() {
