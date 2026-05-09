@@ -48,12 +48,14 @@ interface SelectListProps<T extends object> extends Omit<
 > {
   items?: Iterable<T>;
   popover?: Omit<PopoverProps, "children">;
+  search?: React.ReactNode;
 }
 
 const SelectContent = <T extends object>({
   items,
   className,
   popover,
+  search,
   ...props
 }: SelectListProps<T>) => {
   return (
@@ -65,6 +67,7 @@ const SelectContent = <T extends object>({
       )}
       {...popover}
     >
+      {search && <div className="border-b border-border p-1.5">{search}</div>}
       <ListBox
         layout="stack"
         orientation="vertical"

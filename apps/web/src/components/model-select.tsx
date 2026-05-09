@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Select,
   SelectContent,
@@ -8,6 +8,7 @@ import {
   SelectSection,
   SelectTrigger,
 } from "@/components/ui/select";
+import { SearchField, SearchInput } from "@/components/ui/search-field";
 import { useModelStore } from "@/stores/model-store";
 import { useProviders } from "@/hooks/use-opencode";
 
@@ -70,12 +71,15 @@ function transformProviders(data: {
 }
 
 function getFirstModelKey(providers: ProviderWithModels[]) {
-  return providers.find((provider) => provider.models.length > 0)?.models[0]
-    ?.id ?? null;
+  return (
+    providers.find((provider) => provider.models.length > 0)?.models[0]?.id ??
+    null
+  );
 }
 
 export function ModelSelect() {
   const { data: rawData, isLoading } = useProviders();
+  const [search, setSearch] = useState("");
 
   const selectedModel = useModelStore((s) => s.selectedModel);
   const setModelFromKey = useModelStore((s) => s.setModelFromKey);
@@ -87,9 +91,29 @@ export function ModelSelect() {
   );
   const providers = data?.providers ?? [];
   const defaultModel = data?.defaultModel ?? null;
+  const filteredProviders = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return providers;
+
+    return providers
+      .map((provider) => ({
+        ...provider,
+        models: provider.models.filter((model) =>
+          `${model.name} ${model.providerName} ${model.id}`
+            .toLowerCase()
+            .includes(query),
+        ),
+      }))
+      .filter((provider) => provider.models.length > 0);
+  }, [providers, search]);
   const selectedModelKey = `${selectedModel.providerID}/${selectedModel.modelID}`;
   const modelKeys = useMemo(
-    () => new Set(providers.flatMap((provider) => provider.models.map((model) => model.id))),
+    () =>
+      new Set(
+        providers.flatMap((provider) =>
+          provider.models.map((model) => model.id),
+        ),
+      ),
     [providers],
   );
   const fallbackModel =
@@ -127,16 +151,36 @@ export function ModelSelect() {
       onSelectionChange={(key) => {
         if (key) {
           setModelFromKey(String(key));
+          setSearch("");
         }
       }}
     >
       <SelectTrigger className="w-52" />
-      <SelectContent items={providers}>
+      <SelectContent
+        items={filteredProviders}
+        popover={{ placement: "bottom end" }}
+        search={
+          <SearchField
+            aria-label="Search models"
+            value={search}
+            onChange={setSearch}
+          >
+            <SearchInput placeholder="Search models..." />
+          </SearchField>
+        }
+        renderEmptyState={() => (
+          <div className="col-span-full px-3 py-6 text-center text-sm text-muted-fg">
+            No models found
+          </div>
+        )}
+      >
         {(provider) => (
           <SelectSection title={provider.name} items={provider.models}>
             {(model) => (
               <SelectItem id={model.id} textValue={model.name}>
-                <SelectLabel>{model.name}</SelectLabel>
+                <SelectLabel className="min-w-0 truncate">
+                  {model.name}
+                </SelectLabel>
                 <SelectDescription>{model.providerName}</SelectDescription>
               </SelectItem>
             )}

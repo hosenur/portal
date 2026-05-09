@@ -21,6 +21,7 @@ import {
   IconPen,
   IconSquareFeather,
   IconUser,
+  InformationCircleIcon,
   SendIcon,
 } from "@/components/icons/lucide";
 import { useAgentStore } from "@/stores/agent-store";
@@ -49,6 +50,7 @@ import {
   useSessionStatuses,
   useSessions,
 } from "@/hooks/use-opencode";
+import { getErrorMessage, getResponseErrorMessage } from "@/lib/error-message";
 import type { Agent, Session, SessionMessage } from "@opencode-ai/sdk/v2";
 
 export const Route = createFileRoute("/_app/session/$id")({
@@ -80,7 +82,8 @@ let messageIdCounter = 0;
 
 function getRandomBytes(length: number) {
   const bytes = new Uint8Array(length);
-  const cryptoObj = typeof globalThis !== "undefined" ? globalThis.crypto : undefined;
+  const cryptoObj =
+    typeof globalThis !== "undefined" ? globalThis.crypto : undefined;
 
   if (cryptoObj && typeof cryptoObj.getRandomValues === "function") {
     cryptoObj.getRandomValues(bytes);
@@ -95,7 +98,8 @@ function getRandomBytes(length: number) {
 }
 
 function randomBase62(length: number) {
-  const chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+  const chars =
+    "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
   const bytes = getRandomBytes(length);
   let result = "";
 
@@ -121,9 +125,7 @@ function createClientMessageId() {
   const timeBytes = new Uint8Array(6);
 
   for (let i = 0; i < timeBytes.length; i += 1) {
-    timeBytes[i] = Number(
-      (encoded >> BigInt(40 - 8 * i)) & BigInt(0xff),
-    );
+    timeBytes[i] = Number((encoded >> BigInt(40 - 8 * i)) & BigInt(0xff));
   }
 
   const timeHex = Array.from(timeBytes)
@@ -131,7 +133,6 @@ function createClientMessageId() {
     .join("");
   return `msg_${timeHex}${randomBase62(OPENCODE_ID_LENGTH - timeHex.length)}`;
 }
-
 
 function isToolPart(part: Part): part is ToolPart {
   return part.type === "tool";
@@ -308,6 +309,36 @@ function getMessageContent(parts: Part[]): string {
     .join("\n\n");
 }
 
+function getAssistantError(message: MessageWithParts) {
+  return "error" in message.info ? getErrorMessage(message.info.error) : null;
+}
+
+function ChatErrorAlert({
+  title,
+  message,
+  className = "",
+}: {
+  title: string;
+  message: string;
+  className?: string;
+}) {
+  return (
+    <div
+      role="alert"
+      aria-live="polite"
+      className={`rounded-md border border-danger/20 bg-danger-subtle px-3 py-2 text-danger-subtle-fg ${className}`}
+    >
+      <div className="flex items-start gap-2">
+        <InformationCircleIcon size="14px" className="mt-0.5 shrink-0" />
+        <div className="min-w-0">
+          <div className="text-sm font-medium">{title}</div>
+          <div className="mt-0.5 break-words text-xs opacity-90">{message}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function QuestionAnswerForm({
   questions,
   partKey,
@@ -326,7 +357,9 @@ function QuestionAnswerForm({
   onResolved: (requestId: string) => void;
 }) {
   const [selections, setSelections] = useState<Record<number, string[]>>({});
-  const [freeformInputs, setFreeformInputs] = useState<Record<number, string>>({});
+  const [freeformInputs, setFreeformInputs] = useState<Record<number, string>>(
+    {},
+  );
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -364,7 +397,9 @@ function QuestionAnswerForm({
       }
 
       if (!match) {
-        throw new Error("Question request not found - it may have already been answered");
+        throw new Error(
+          "Question request not found - it may have already been answered",
+        );
       }
 
       // Build answers array: one string[] per question
@@ -390,7 +425,9 @@ function QuestionAnswerForm({
       onResolved(match.id);
       mutateSessionMessages(port, sessionId);
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "Failed to submit answers");
+      setSubmitError(
+        err instanceof Error ? err.message : "Failed to submit answers",
+      );
       setSubmitting(false);
     }
   };
@@ -455,7 +492,10 @@ function QuestionAnswerForm({
                 placeholder="Type your answer..."
                 value={freeformInputs[idx] || ""}
                 onChange={(e) =>
-                  setFreeformInputs((prev) => ({ ...prev, [idx]: e.target.value }))
+                  setFreeformInputs((prev) => ({
+                    ...prev,
+                    [idx]: e.target.value,
+                  }))
                 }
                 className="w-full rounded-md border border-border bg-bg px-2 py-1 text-xs text-fg placeholder:text-muted-fg focus:outline-none focus:border-primary"
               />
@@ -674,14 +714,16 @@ const MessageItem = memo(function MessageItem({
 }) {
   const textContent = getMessageContent(message.parts);
   const isAssistant = message.info.role === "assistant";
+  const messageError = isAssistant ? getAssistantError(message) : null;
   const toolCalls = message.parts.filter(isToolPart);
   const messagePermissions = pendingPermissions.filter(
     (perm) => perm.tool?.messageID === message.info.id,
   );
+  const hasMainContent = !!(textContent || messageError);
 
   return (
     <div className="py-3 px-6">
-      {textContent && (
+      {hasMainContent && (
         <div className="flex gap-2">
           {isAssistant ? (
             <IconBadgeSparkle size="16px" className="shrink-0 mt-1" />
@@ -697,13 +739,22 @@ const MessageItem = memo(function MessageItem({
             <div
               className={`prose prose-sm dark:prose-invert max-w-none overflow-x-hidden ${!isAssistant ? "text-muted-fg" : ""}`}
             >
-              <Markdown remarkPlugins={[remarkGfm]}>{textContent}</Markdown>
+              {textContent && (
+                <Markdown remarkPlugins={[remarkGfm]}>{textContent}</Markdown>
+              )}
             </div>
+            {messageError && (
+              <ChatErrorAlert
+                title="Message failed"
+                message={messageError}
+                className={textContent ? "mt-2" : ""}
+              />
+            )}
           </div>
         </div>
       )}
       {toolCalls.length > 0 && (
-        <div className={`${textContent ? "mt-2 ml-6" : ""} space-y-0.5`}>
+        <div className={`${hasMainContent ? "mt-2 ml-6" : ""} space-y-0.5`}>
           {toolCalls.map((part) => (
             <ToolCallItem
               key={part.callID || part.id}
@@ -717,7 +768,7 @@ const MessageItem = memo(function MessageItem({
         </div>
       )}
       {messagePermissions.length > 0 && (
-        <div className={`${textContent ? "mt-2 ml-6" : ""} space-y-2`}>
+        <div className={`${hasMainContent ? "mt-2 ml-6" : ""} space-y-2`}>
           {messagePermissions.map((permission) => (
             <PermissionRequestForm
               key={permission.id}
@@ -735,7 +786,9 @@ const MessageItem = memo(function MessageItem({
 function hasVisibleContent(message: MessageWithParts): boolean {
   const textContent = getMessageContent(message.parts);
   const hasToolCalls = message.parts.some(isToolPart);
-  return !!(textContent || hasToolCalls);
+  const messageError =
+    message.info.role === "assistant" ? getAssistantError(message) : null;
+  return !!(textContent || hasToolCalls || messageError);
 }
 
 function SessionPage() {
@@ -753,8 +806,7 @@ function SessionPage() {
   const { data: agentsData } = useAgents();
   const { data: sessionStatusesData, mutate: mutateSessionStatuses } =
     useSessionStatuses();
-  const { data: permissionsData, mutate: mutatePermissions } =
-    usePermissions();
+  const { data: permissionsData, mutate: mutatePermissions } = usePermissions();
   const { data: questionsData, mutate: mutateQuestions } = useQuestions();
   const selectedModel = useModelStore((s) => s.selectedModel);
   const selectedAgent = useAgentStore((s) => s.getSelectedAgent(sessionId));
@@ -795,9 +847,11 @@ function SessionPage() {
   const prevMessagesLengthRef = useRef(0);
   const fileMention = useFileMention();
 
-  const error = messagesError?.message || sendError;
+  const messagesLoadError = messagesError?.message;
 
-  const sessionStatus = sessionId ? sessionStatusesData?.[sessionId] : undefined;
+  const sessionStatus = sessionId
+    ? sessionStatusesData?.[sessionId]
+    : undefined;
   const sending = useMemo(() => {
     const statusActive =
       sessionStatus?.type === "busy" || sessionStatus?.type === "retry";
@@ -864,7 +918,8 @@ function SessionPage() {
     [messages],
   );
   const unlinkedPermissions = pendingPermissions.filter(
-    (perm) => !perm.tool?.messageID || !visibleMessageIds.has(perm.tool.messageID),
+    (perm) =>
+      !perm.tool?.messageID || !visibleMessageIds.has(perm.tool.messageID),
   );
 
   const scrollToBottom = useCallback(() => {
@@ -951,12 +1006,20 @@ function SessionPage() {
         );
 
         if (!response.ok) {
-          throw new Error("Failed to send message");
+          const fallback = `Failed to send message (${response.status}${
+            response.statusText ? ` ${response.statusText}` : ""
+          })`;
+          throw new Error(await getResponseErrorMessage(response, fallback));
         }
 
         const result = (await response.json()) as PromptSendResponse;
         if (result.message?.id) {
-          reconcileOptimisticMessage(port, sessionId, messageId, result.message);
+          reconcileOptimisticMessage(
+            port,
+            sessionId,
+            messageId,
+            result.message,
+          );
         } else {
           settleOptimisticMessage(port, sessionId, messageId);
         }
@@ -1061,13 +1124,13 @@ function SessionPage() {
           </div>
         )}
 
-        {error && (
+        {messagesLoadError && (
           <div className="rounded-md bg-danger-subtle p-4 m-4 text-danger-subtle-fg">
-            Error: {error}
+            Error: {messagesLoadError}
           </div>
         )}
 
-        {!loading && !error && messages.length === 0 && (
+        {!loading && !messagesLoadError && messages.length === 0 && (
           <div className="flex h-full items-center justify-center">
             <div className="text-center text-muted-fg">No messages yet</div>
           </div>
@@ -1129,6 +1192,13 @@ function SessionPage() {
           }}
         />
         <form onSubmit={handleSubmit} className="w-full">
+          {sendError && (
+            <ChatErrorAlert
+              title="Message failed"
+              message={sendError}
+              className="mb-3"
+            />
+          )}
           <Textarea
             ref={textareaRef}
             value={input}

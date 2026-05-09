@@ -21,6 +21,7 @@ import type {
   ToolTextContent,
 } from "@opencode-ai/sdk/v2";
 import { useInstanceStore } from "@/stores/instance-store";
+import { getErrorMessage } from "@/lib/error-message";
 
 export type { Message, Part, ToolPart, ToolState, TextPart, PermissionRequest, QuestionAnswer, QuestionInfo, QuestionOption, QuestionRequest, SessionMessage };
 
@@ -33,6 +34,7 @@ export interface MessageWithParts {
 type LegacyAssistantMessage = Extract<Message, { role: "assistant" }>;
 type LegacyUserMessage = Extract<Message, { role: "user" }>;
 type ToolContent = ToolTextContent | ToolFileContent;
+type AssistantError = NonNullable<SessionMessageAssistant["error"]>;
 
 const EMPTY_TOKENS = {
   total: 0,
@@ -301,6 +303,7 @@ function legacyMessageToSessionMessage(message: MessageWithParts): SessionMessag
 
   const stepStart = message.parts.find((part) => part.type === "step-start");
   const stepFinish = message.parts.find((part) => part.type === "step-finish");
+  const error = toAssistantError(message.info.error);
 
   return {
     id: message.info.id,
@@ -316,6 +319,7 @@ function legacyMessageToSessionMessage(message: MessageWithParts): SessionMessag
     cost: message.info.cost,
     tokens: legacyTokensToSession(message.info.tokens),
     ...(message.info.finish ? { finish: message.info.finish } : {}),
+    ...(error ? { error } : {}),
     ...(stepStart?.type === "step-start" || stepFinish?.type === "step-finish"
       ? {
           snapshot: {
@@ -379,8 +383,21 @@ function legacyAssistantInfo(
     cost: message.cost ?? 0,
     tokens,
     ...(message.finish ? { finish: message.finish } : {}),
+    ...(message.error
+      ? {
+          error: {
+            name: "UnknownError",
+            data: { message: message.error.message },
+          },
+        }
+      : {}),
     ...(message.model.variant ? { variant: message.model.variant } : {}),
   };
+}
+
+function toAssistantError(error: unknown): AssistantError | undefined {
+  const message = getErrorMessage(error);
+  return message ? { type: "unknown", message } : undefined;
 }
 
 function syntheticAssistantInfo(

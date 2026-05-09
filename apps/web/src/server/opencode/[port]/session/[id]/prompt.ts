@@ -1,7 +1,12 @@
 import { z } from "zod/v4";
-import { defineHandler } from "nitro/h3";
+import { HTTPError, defineHandler } from "nitro/h3";
+import { formatErrorMessage } from "@/lib/error-message";
 import { getOpencodeClient } from "../../../../lib/opencode-client";
-import { parsePort, parseRouteParam, parseBody } from "../../../../lib/validation";
+import {
+  parsePort,
+  parseRouteParam,
+  parseBody,
+} from "../../../../lib/validation";
 
 const PROMPT_DEDUPE_TTL_MS = 2 * 60 * 1000;
 const recentPromptRequests = new Map<string, number>();
@@ -69,7 +74,9 @@ export default defineHandler(async (event) => {
     if (requestKey) {
       recentPromptRequests.delete(requestKey);
     }
-    throw error;
+    throw new HTTPError(formatErrorMessage(error, "Failed to send message"), {
+      status: 500,
+    });
   }
 
   return {
