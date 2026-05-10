@@ -17,18 +17,18 @@ import {
 import { useInstanceStore, type Instance } from "@/stores/instance-store";
 import {
   ChatBubbleLeftIcon,
-  IconBox,
   IconGridPlus,
   IconManageInstances,
   IconThemeDark,
   IconThemeLight,
   IconThemeSystem,
-  ServerIcon,
   TrashIcon,
 } from "@/components/icons/lucide";
+import { ProviderIcon } from "@/components/icons/provider-icon";
 import { useTheme } from "@/providers/theme-provider";
 import { toast } from "@/components/ui/toast";
 import type { Session } from "@opencode-ai/sdk/v2";
+import type { BackendProvider } from "@/lib/backend-url";
 
 function truncateTitle(title: string, maxLength = 40): string {
   if (title.length <= maxLength) return title;
@@ -39,6 +39,7 @@ function truncateTitle(title: string, maxLength = 40): string {
 interface InstanceData {
   id: string;
   name: string;
+  provider?: BackendProvider;
   directory: string;
   port: number;
   hostname: string;
@@ -123,6 +124,7 @@ export default function Cmd() {
       id: instance.id,
       name: instance.name,
       port: instance.port,
+      provider: instance.provider ?? "opencode",
     };
     setInstance(newInstance);
     toast.success(`Switched to ${instance.name}`);
@@ -183,11 +185,11 @@ export default function Cmd() {
                 textValue={instance.name}
                 onAction={() => handleInstanceSelect(instance)}
               >
-                {currentInstance?.id === instance.id ? (
-                  <IconBox className="size-4 mr-2" />
-                ) : (
-                  <ServerIcon className="size-4 mr-2" />
-                )}
+                <ProviderIcon
+                  provider={instance.provider}
+                  className="size-4 mr-2"
+                  aria-hidden="true"
+                />
                 <CommandMenuLabel>{instance.name}</CommandMenuLabel>
                 {currentInstance?.id === instance.id && (
                   <div className="absolute right-2 size-2 rounded-full bg-primary" />

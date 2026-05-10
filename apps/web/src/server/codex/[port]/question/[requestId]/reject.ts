@@ -1,0 +1,11 @@
+import { defineHandler } from "nitro/h3";
+import { getCodexClient } from "../../../../lib/codex-client";
+import { parsePort, parseRouteParam } from "../../../../lib/validation";
+
+export default defineHandler(async (event) => {
+  const port = parsePort(event);
+  const requestId = parseRouteParam(event, "requestId");
+
+  await getCodexClient(port).rejectQuestion(requestId);
+  return {};
+});

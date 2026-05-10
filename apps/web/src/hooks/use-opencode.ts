@@ -1,5 +1,6 @@
 import useSWR from "swr";
 import { useInstanceStore } from "@/stores/instance-store";
+import { backendBasePath } from "@/lib/backend-url";
 import type { SessionStatus } from "@opencode-ai/sdk/v2";
 
 const fetcher = async (url: string) => {
@@ -10,44 +11,52 @@ const fetcher = async (url: string) => {
   return res.json();
 };
 
-function usePort() {
+function useBackend() {
   const instance = useInstanceStore((s) => s.instance);
-  return instance?.port ?? null;
+  return instance
+    ? {
+        port: instance.port,
+        basePath: backendBasePath(instance.provider, instance.port),
+      }
+    : null;
 }
 
 export function useInstances() {
-  return useSWR("/api/instances", fetcher);
+  return useSWR("/api/instances", fetcher, {
+    refreshInterval: 5_000,
+    revalidateOnFocus: true,
+  });
 }
 
 export function useSessions() {
-  const port = usePort();
+  const backend = useBackend();
 
-  return useSWR(port ? `/api/opencode/${port}/sessions` : null, fetcher);
+  return useSWR(backend ? `${backend.basePath}/sessions` : null, fetcher);
 }
 
 export function useSession(id: string | null) {
-  const port = usePort();
+  const backend = useBackend();
 
   return useSWR(
-    port && id ? `/api/opencode/${port}/session/${id}` : null,
+    backend && id ? `${backend.basePath}/session/${id}` : null,
     fetcher,
   );
 }
 
 export function useSessionMessages(id: string | null) {
-  const port = usePort();
+  const backend = useBackend();
 
   return useSWR(
-    port && id ? `/api/opencode/${port}/session/${id}/messages` : null,
+    backend && id ? `${backend.basePath}/session/${id}/messages` : null,
     fetcher,
   );
 }
 
 export function useSessionStatuses() {
-  const port = usePort();
+  const backend = useBackend();
 
   return useSWR<Record<string, SessionStatus>>(
-    port ? `/api/opencode/${port}/session/status` : null,
+    backend ? `${backend.basePath}/session/status` : null,
     fetcher,
     {
       revalidateOnFocus: false,
@@ -60,33 +69,36 @@ export function useSessionStatuses() {
 }
 
 export function useConfig() {
-  const port = usePort();
+  const backend = useBackend();
 
-  return useSWR(port ? `/api/opencode/${port}/config` : null, fetcher);
+  return useSWR(backend ? `${backend.basePath}/config` : null, fetcher);
 }
 
 export function useProviders() {
-  const port = usePort();
+  const backend = useBackend();
 
-  return useSWR(port ? `/api/opencode/${port}/providers` : null, fetcher);
+  return useSWR(backend ? `${backend.basePath}/providers` : null, fetcher);
 }
 
 export function useAgents() {
-  const port = usePort();
+  const backend = useBackend();
 
-  return useSWR(port ? `/api/opencode/${port}/agents` : null, fetcher);
+  return useSWR(backend ? `${backend.basePath}/agents` : null, fetcher);
 }
 
 export function useHealth() {
-  const port = usePort();
+  const backend = useBackend();
 
-  return useSWR(port ? `/api/opencode/${port}/health` : null, fetcher);
+  return useSWR(backend ? `${backend.basePath}/health` : null, fetcher);
 }
 
 export function useCurrentProject() {
-  const port = usePort();
+  const backend = useBackend();
 
-  return useSWR(port ? `/api/opencode/${port}/project/current` : null, fetcher);
+  return useSWR(
+    backend ? `${backend.basePath}/project/current` : null,
+    fetcher,
+  );
 }
 
 export function useHostname() {
@@ -94,12 +106,12 @@ export function useHostname() {
 }
 
 export function useCreateSession() {
-  const port = usePort();
+  const backend = useBackend();
 
   return async (title?: string) => {
-    if (!port) throw new Error("No instance selected");
+    if (!backend) throw new Error("No instance selected");
 
-    const res = await fetch(`/api/opencode/${port}/session/create`, {
+    const res = await fetch(`${backend.basePath}/session/create`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title }),
@@ -114,12 +126,12 @@ export function useCreateSession() {
 }
 
 export function useDeleteSession() {
-  const port = usePort();
+  const backend = useBackend();
 
   return async (sessionId: string) => {
-    if (!port) throw new Error("No instance selected");
+    if (!backend) throw new Error("No instance selected");
 
-    const res = await fetch(`/api/opencode/${port}/session/${sessionId}`, {
+    const res = await fetch(`${backend.basePath}/session/${sessionId}`, {
       method: "DELETE",
     });
 
@@ -132,31 +144,38 @@ export function useDeleteSession() {
 }
 
 export function useGitDiff() {
-  const port = usePort();
+  const backend = useBackend();
 
   return useSWR<{ diff: string; worktree: string }>(
-    port ? `/api/opencode/${port}/git/diff` : null,
+    backend ? `${backend.basePath}/git/diff` : null,
     fetcher,
   );
 }
 
 export function usePermissions() {
-  const port = usePort();
+  const backend = useBackend();
 
-  return useSWR(port ? `/api/opencode/${port}/permissions` : null, fetcher);
+  return useSWR(backend ? `${backend.basePath}/permissions` : null, fetcher);
 }
 
 export function useReplyPermission() {
-  const port = usePort();
+  const backend = useBackend();
 
-  return async (requestId: string, reply: "once" | "always" | "reject", message?: string) => {
-    if (!port) throw new Error("No instance selected");
+  return async (
+    requestId: string,
+    reply: "once" | "always" | "reject",
+    message?: string,
+  ) => {
+    if (!backend) throw new Error("No instance selected");
 
-    const res = await fetch(`/api/opencode/${port}/permission/${requestId}/reply`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reply, message }),
-    });
+    const res = await fetch(
+      `${backend.basePath}/permission/${requestId}/reply`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reply, message }),
+      },
+    );
 
     if (!res.ok) {
       throw new Error(`Failed to reply to permission: ${res.status}`);
@@ -167,18 +186,18 @@ export function useReplyPermission() {
 }
 
 export function useQuestions() {
-  const port = usePort();
+  const backend = useBackend();
 
-  return useSWR(port ? `/api/opencode/${port}/questions` : null, fetcher);
+  return useSWR(backend ? `${backend.basePath}/questions` : null, fetcher);
 }
 
 export function useReplyQuestion() {
-  const port = usePort();
+  const backend = useBackend();
 
   return async (requestId: string, answers: string[][]) => {
-    if (!port) throw new Error("No instance selected");
+    if (!backend) throw new Error("No instance selected");
 
-    const res = await fetch(`/api/opencode/${port}/question/${requestId}/reply`, {
+    const res = await fetch(`${backend.basePath}/question/${requestId}/reply`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ answers }),
@@ -193,14 +212,17 @@ export function useReplyQuestion() {
 }
 
 export function useRejectQuestion() {
-  const port = usePort();
+  const backend = useBackend();
 
   return async (requestId: string) => {
-    if (!port) throw new Error("No instance selected");
+    if (!backend) throw new Error("No instance selected");
 
-    const res = await fetch(`/api/opencode/${port}/question/${requestId}/reject`, {
-      method: "POST",
-    });
+    const res = await fetch(
+      `${backend.basePath}/question/${requestId}/reject`,
+      {
+        method: "POST",
+      },
+    );
 
     if (!res.ok) {
       throw new Error(`Failed to reject question: ${res.status}`);
@@ -211,12 +233,12 @@ export function useRejectQuestion() {
 }
 
 export function useAbortSession() {
-  const port = usePort();
+  const backend = useBackend();
 
   return async (sessionId: string) => {
-    if (!port) throw new Error("No instance selected");
+    if (!backend) throw new Error("No instance selected");
 
-    const res = await fetch(`/api/opencode/${port}/session/${sessionId}/abort`, {
+    const res = await fetch(`${backend.basePath}/session/${sessionId}/abort`, {
       method: "POST",
     });
 

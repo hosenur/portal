@@ -12,7 +12,11 @@ import type {
   SessionMessageAssistantText,
   SessionMessageAssistantTool,
 } from "@opencode-ai/sdk/v2";
-import { getMessagesKey, sortSessionMessages } from "@/hooks/use-session-messages";
+import {
+  getMessagesKey,
+  sortSessionMessages,
+} from "@/hooks/use-session-messages";
+import { backendBasePath, type BackendProvider } from "@/lib/backend-url";
 
 type RuntimeEvent =
   | Event
@@ -22,28 +26,28 @@ type RuntimeEvent =
       properties: Record<string, unknown>;
     };
 
-function sessionsKey(port: number) {
-  return `/api/opencode/${port}/sessions`;
+function sessionsKey(port: number, provider?: BackendProvider) {
+  return `${backendBasePath(provider, port)}/sessions`;
 }
 
-function permissionsKey(port: number) {
-  return `/api/opencode/${port}/permissions`;
+function permissionsKey(port: number, provider?: BackendProvider) {
+  return `${backendBasePath(provider, port)}/permissions`;
 }
 
-function questionsKey(port: number) {
-  return `/api/opencode/${port}/questions`;
+function questionsKey(port: number, provider?: BackendProvider) {
+  return `${backendBasePath(provider, port)}/questions`;
 }
 
-function gitDiffKey(port: number) {
-  return `/api/opencode/${port}/git/diff`;
+function gitDiffKey(port: number, provider?: BackendProvider) {
+  return `${backendBasePath(provider, port)}/git/diff`;
 }
 
-function currentProjectKey(port: number) {
-  return `/api/opencode/${port}/project/current`;
+function currentProjectKey(port: number, provider?: BackendProvider) {
+  return `${backendBasePath(provider, port)}/project/current`;
 }
 
-function sessionStatusKey(port: number) {
-  return `/api/opencode/${port}/session/status`;
+function sessionStatusKey(port: number, provider?: BackendProvider) {
+  return `${backendBasePath(provider, port)}/session/status`;
 }
 
 function upsertById<T extends { id: string }>(items: T[] | undefined, item: T) {
@@ -71,9 +75,13 @@ function sortSessions(sessions: Session[]) {
   );
 }
 
-function mutateSessions(port: number, updater: (items: Session[]) => Session[]) {
+function mutateSessions(
+  port: number,
+  provider: BackendProvider | undefined,
+  updater: (items: Session[]) => Session[],
+) {
   void mutate<Session[]>(
-    sessionsKey(port),
+    sessionsKey(port, provider),
     (current) => updater(current ?? []),
     { revalidate: false },
   );
@@ -81,10 +89,11 @@ function mutateSessions(port: number, updater: (items: Session[]) => Session[]) 
 
 function mutatePermissions(
   port: number,
+  provider: BackendProvider | undefined,
   updater: (items: PermissionRequest[]) => PermissionRequest[],
 ) {
   void mutate<PermissionRequest[]>(
-    permissionsKey(port),
+    permissionsKey(port, provider),
     (current) => updater(current ?? []),
     { revalidate: false },
   );
@@ -92,10 +101,11 @@ function mutatePermissions(
 
 function mutateQuestions(
   port: number,
+  provider: BackendProvider | undefined,
   updater: (items: QuestionRequest[]) => QuestionRequest[],
 ) {
   void mutate<QuestionRequest[]>(
-    questionsKey(port),
+    questionsKey(port, provider),
     (current) => updater(current ?? []),
     { revalidate: false },
   );
@@ -103,10 +113,13 @@ function mutateQuestions(
 
 function mutateSessionStatuses(
   port: number,
-  updater: (items: Record<string, SessionStatus>) => Record<string, SessionStatus>,
+  provider: BackendProvider | undefined,
+  updater: (
+    items: Record<string, SessionStatus>,
+  ) => Record<string, SessionStatus>,
 ) {
   void mutate<Record<string, SessionStatus>>(
-    sessionStatusKey(port),
+    sessionStatusKey(port, provider),
     (current) => updater(current ?? {}),
     { revalidate: false },
   );
@@ -114,47 +127,67 @@ function mutateSessionStatuses(
 
 function mutateMessages(
   port: number,
+  provider: BackendProvider | undefined,
   sessionID: string,
   updater: (items: SessionMessage[]) => SessionMessage[],
 ) {
   void mutate<SessionMessage[]>(
-    getMessagesKey(port, sessionID),
+    getMessagesKey(port, sessionID, provider),
     (current) => updater(current ?? []),
     { revalidate: false },
   );
 }
 
-function revalidateMessages(port: number, sessionID: string) {
-  void mutate(getMessagesKey(port, sessionID));
+function revalidateMessages(
+  port: number,
+  provider: BackendProvider | undefined,
+  sessionID: string,
+) {
+  void mutate(getMessagesKey(port, sessionID, provider));
 }
 
-const messageRevalidationTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const messageRevalidationTimers = new Map<
+  string,
+  ReturnType<typeof setTimeout>
+>();
 
-function messageRevalidationKey(port: number, sessionID: string) {
-  return `${port}:${sessionID}`;
+function messageRevalidationKey(
+  port: number,
+  provider: BackendProvider | undefined,
+  sessionID: string,
+) {
+  return `${provider ?? "opencode"}:${port}:${sessionID}`;
 }
 
-function revalidateMessagesSoon(port: number, sessionID: string) {
-  const key = messageRevalidationKey(port, sessionID);
+function revalidateMessagesSoon(
+  port: number,
+  provider: BackendProvider | undefined,
+  sessionID: string,
+) {
+  const key = messageRevalidationKey(port, provider, sessionID);
   if (messageRevalidationTimers.has(key)) return;
 
   const timer = setTimeout(() => {
     messageRevalidationTimers.delete(key);
-    revalidateMessages(port, sessionID);
+    revalidateMessages(port, provider, sessionID);
   }, 300);
 
   messageRevalidationTimers.set(key, timer);
 }
 
-function revalidateMessagesNow(port: number, sessionID: string) {
-  const key = messageRevalidationKey(port, sessionID);
+function revalidateMessagesNow(
+  port: number,
+  provider: BackendProvider | undefined,
+  sessionID: string,
+) {
+  const key = messageRevalidationKey(port, provider, sessionID);
   const timer = messageRevalidationTimers.get(key);
   if (timer) {
     clearTimeout(timer);
     messageRevalidationTimers.delete(key);
   }
 
-  revalidateMessages(port, sessionID);
+  revalidateMessages(port, provider, sessionID);
 }
 
 function upsertMessage(messages: SessionMessage[], message: SessionMessage) {
@@ -192,13 +225,11 @@ function activeAssistantIndex(messages: SessionMessage[]) {
   );
 }
 
-function latestToolIndex(
-  assistant: SessionMessageAssistant,
-  callID?: string,
-) {
+function latestToolIndex(assistant: SessionMessageAssistant, callID?: string) {
   return findLastIndex(
     assistant.content,
-    (item) => item.type === "tool" && (callID === undefined || item.id === callID),
+    (item) =>
+      item.type === "tool" && (callID === undefined || item.id === callID),
   );
 }
 
@@ -244,10 +275,7 @@ function updateLatestTool(
   return { ...assistant, content };
 }
 
-function closeActiveAssistant(
-  messages: SessionMessage[],
-  timestamp: number,
-) {
+function closeActiveAssistant(messages: SessionMessage[], timestamp: number) {
   return updateActiveAssistant(messages, (assistant) => ({
     ...assistant,
     time: {
@@ -281,23 +309,28 @@ function removeMatchingOptimisticUser(
   );
 }
 
-function revalidateInstance(port: number) {
-  void mutate(sessionsKey(port));
-  void mutate(sessionStatusKey(port));
-  void mutate(permissionsKey(port));
-  void mutate(questionsKey(port));
+function revalidateInstance(port: number, provider?: BackendProvider) {
+  void mutate(sessionsKey(port, provider));
+  void mutate(sessionStatusKey(port, provider));
+  void mutate(permissionsKey(port, provider));
+  void mutate(questionsKey(port, provider));
+  const basePath = backendBasePath(provider, port);
   void mutate(
     (key) =>
       typeof key === "string" &&
-      key.startsWith(`/api/opencode/${port}/session/`) &&
+      key.startsWith(`${basePath}/session/`) &&
       key.endsWith("/messages"),
   );
 }
 
-function applyEvent(port: number, event: RuntimeEvent) {
+function applyEvent(
+  port: number,
+  provider: BackendProvider | undefined,
+  event: RuntimeEvent,
+) {
   switch (event.type) {
     case "server.connected":
-      revalidateInstance(port);
+      revalidateInstance(port, provider);
       break;
 
     case "server.heartbeat":
@@ -306,16 +339,16 @@ function applyEvent(port: number, event: RuntimeEvent) {
 
     case "session.created":
     case "session.updated":
-      mutateSessions(port, (items) =>
+      mutateSessions(port, provider, (items) =>
         sortSessions(upsertById(items, event.properties.info)),
       );
       break;
 
     case "session.deleted":
-      mutateSessions(port, (items) =>
+      mutateSessions(port, provider, (items) =>
         removeById(items, event.properties.sessionID),
       );
-      mutateSessionStatuses(port, (items) => {
+      mutateSessionStatuses(port, provider, (items) => {
         const next = { ...items };
         delete next[event.properties.sessionID];
         return next;
@@ -323,22 +356,22 @@ function applyEvent(port: number, event: RuntimeEvent) {
       break;
 
     case "session.status":
-      mutateSessionStatuses(port, (items) => ({
+      mutateSessionStatuses(port, provider, (items) => ({
         ...items,
         [event.properties.sessionID]: event.properties.status,
       }));
       break;
 
     case "session.idle":
-      mutateSessionStatuses(port, (items) => ({
+      mutateSessionStatuses(port, provider, (items) => ({
         ...items,
         [event.properties.sessionID]: { type: "idle" },
       }));
-      revalidateMessagesNow(port, event.properties.sessionID);
+      revalidateMessagesNow(port, provider, event.properties.sessionID);
       break;
 
     case "session.next.agent.switched":
-      mutateMessages(port, event.properties.sessionID, (items) =>
+      mutateMessages(port, provider, event.properties.sessionID, (items) =>
         upsertMessage(items, {
           id: event.id,
           type: "agent-switched",
@@ -351,7 +384,7 @@ function applyEvent(port: number, event: RuntimeEvent) {
       break;
 
     case "session.next.model.switched":
-      mutateMessages(port, event.properties.sessionID, (items) =>
+      mutateMessages(port, provider, event.properties.sessionID, (items) =>
         upsertMessage(items, {
           id: event.id,
           type: "model-switched",
@@ -364,7 +397,7 @@ function applyEvent(port: number, event: RuntimeEvent) {
       break;
 
     case "session.next.prompted":
-      mutateMessages(port, event.properties.sessionID, (items) =>
+      mutateMessages(port, provider, event.properties.sessionID, (items) =>
         upsertMessage(
           removeMatchingOptimisticUser(items, event.properties.prompt.text),
           {
@@ -382,7 +415,7 @@ function applyEvent(port: number, event: RuntimeEvent) {
       break;
 
     case "session.next.synthetic":
-      mutateMessages(port, event.properties.sessionID, (items) =>
+      mutateMessages(port, provider, event.properties.sessionID, (items) =>
         upsertMessage(items, {
           id: event.id,
           type: "synthetic",
@@ -396,7 +429,7 @@ function applyEvent(port: number, event: RuntimeEvent) {
       break;
 
     case "session.next.shell.started":
-      mutateMessages(port, event.properties.sessionID, (items) =>
+      mutateMessages(port, provider, event.properties.sessionID, (items) =>
         upsertMessage(items, {
           id: event.id,
           type: "shell",
@@ -411,7 +444,7 @@ function applyEvent(port: number, event: RuntimeEvent) {
       break;
 
     case "session.next.shell.ended":
-      mutateMessages(port, event.properties.sessionID, (items) => {
+      mutateMessages(port, provider, event.properties.sessionID, (items) => {
         const index = findLastIndex(
           items,
           (item) =>
@@ -433,7 +466,7 @@ function applyEvent(port: number, event: RuntimeEvent) {
       break;
 
     case "session.next.step.started":
-      mutateMessages(port, event.properties.sessionID, (items) =>
+      mutateMessages(port, provider, event.properties.sessionID, (items) =>
         upsertMessage(closeActiveAssistant(items, event.properties.timestamp), {
           id: event.id,
           type: "assistant",
@@ -451,7 +484,7 @@ function applyEvent(port: number, event: RuntimeEvent) {
       break;
 
     case "session.next.step.ended":
-      mutateMessages(port, event.properties.sessionID, (items) =>
+      mutateMessages(port, provider, event.properties.sessionID, (items) =>
         updateActiveAssistant(items, (assistant) => ({
           ...assistant,
           finish: event.properties.finish,
@@ -474,7 +507,7 @@ function applyEvent(port: number, event: RuntimeEvent) {
       break;
 
     case "session.next.step.failed":
-      mutateMessages(port, event.properties.sessionID, (items) =>
+      mutateMessages(port, provider, event.properties.sessionID, (items) =>
         updateActiveAssistant(items, (assistant) => ({
           ...assistant,
           finish: "error",
@@ -488,7 +521,7 @@ function applyEvent(port: number, event: RuntimeEvent) {
       break;
 
     case "session.next.text.started":
-      mutateMessages(port, event.properties.sessionID, (items) =>
+      mutateMessages(port, provider, event.properties.sessionID, (items) =>
         appendAssistantContent(items, {
           type: "text",
           text: "",
@@ -497,7 +530,7 @@ function applyEvent(port: number, event: RuntimeEvent) {
       break;
 
     case "session.next.text.delta":
-      mutateMessages(port, event.properties.sessionID, (items) =>
+      mutateMessages(port, provider, event.properties.sessionID, (items) =>
         updateActiveAssistant(items, (assistant) => {
           const textIndex = latestTextIndex(assistant);
           if (textIndex < 0) return assistant;
@@ -516,7 +549,7 @@ function applyEvent(port: number, event: RuntimeEvent) {
       break;
 
     case "session.next.text.ended":
-      mutateMessages(port, event.properties.sessionID, (items) =>
+      mutateMessages(port, provider, event.properties.sessionID, (items) =>
         updateActiveAssistant(items, (assistant) => {
           const textIndex = latestTextIndex(assistant);
           if (textIndex < 0) return assistant;
@@ -535,7 +568,7 @@ function applyEvent(port: number, event: RuntimeEvent) {
       break;
 
     case "session.next.reasoning.started":
-      mutateMessages(port, event.properties.sessionID, (items) =>
+      mutateMessages(port, provider, event.properties.sessionID, (items) =>
         appendAssistantContent(items, {
           type: "reasoning",
           id: event.properties.reasoningID,
@@ -545,7 +578,7 @@ function applyEvent(port: number, event: RuntimeEvent) {
       break;
 
     case "session.next.reasoning.delta":
-      mutateMessages(port, event.properties.sessionID, (items) =>
+      mutateMessages(port, provider, event.properties.sessionID, (items) =>
         updateActiveAssistant(items, (assistant) => {
           const reasoningIndex = latestReasoningIndex(
             assistant,
@@ -567,7 +600,7 @@ function applyEvent(port: number, event: RuntimeEvent) {
       break;
 
     case "session.next.reasoning.ended":
-      mutateMessages(port, event.properties.sessionID, (items) =>
+      mutateMessages(port, provider, event.properties.sessionID, (items) =>
         updateActiveAssistant(items, (assistant) => {
           const reasoningIndex = latestReasoningIndex(
             assistant,
@@ -589,7 +622,7 @@ function applyEvent(port: number, event: RuntimeEvent) {
       break;
 
     case "session.next.tool.input.started":
-      mutateMessages(port, event.properties.sessionID, (items) =>
+      mutateMessages(port, provider, event.properties.sessionID, (items) =>
         appendAssistantContent(items, {
           type: "tool",
           id: event.properties.callID,
@@ -606,7 +639,7 @@ function applyEvent(port: number, event: RuntimeEvent) {
       break;
 
     case "session.next.tool.input.delta":
-      mutateMessages(port, event.properties.sessionID, (items) =>
+      mutateMessages(port, provider, event.properties.sessionID, (items) =>
         updateActiveAssistant(items, (assistant) =>
           updateLatestTool(assistant, event.properties.callID, (tool) => {
             if (tool.state.status !== "pending") return tool;
@@ -623,7 +656,7 @@ function applyEvent(port: number, event: RuntimeEvent) {
       break;
 
     case "session.next.tool.input.ended":
-      mutateMessages(port, event.properties.sessionID, (items) =>
+      mutateMessages(port, provider, event.properties.sessionID, (items) =>
         updateActiveAssistant(items, (assistant) =>
           updateLatestTool(assistant, event.properties.callID, (tool) => {
             if (tool.state.status !== "pending") return tool;
@@ -640,7 +673,7 @@ function applyEvent(port: number, event: RuntimeEvent) {
       break;
 
     case "session.next.tool.called":
-      mutateMessages(port, event.properties.sessionID, (items) =>
+      mutateMessages(port, provider, event.properties.sessionID, (items) =>
         updateActiveAssistant(items, (assistant) =>
           updateLatestTool(assistant, event.properties.callID, (tool) => ({
             ...tool,
@@ -662,7 +695,7 @@ function applyEvent(port: number, event: RuntimeEvent) {
       break;
 
     case "session.next.tool.progress":
-      mutateMessages(port, event.properties.sessionID, (items) =>
+      mutateMessages(port, provider, event.properties.sessionID, (items) =>
         updateActiveAssistant(items, (assistant) =>
           updateLatestTool(assistant, event.properties.callID, (tool) => {
             if (tool.state.status !== "running") return tool;
@@ -680,11 +713,12 @@ function applyEvent(port: number, event: RuntimeEvent) {
       break;
 
     case "session.next.tool.success":
-      mutateMessages(port, event.properties.sessionID, (items) =>
+      mutateMessages(port, provider, event.properties.sessionID, (items) =>
         updateActiveAssistant(items, (assistant) =>
           updateLatestTool(assistant, event.properties.callID, (tool) => {
             const input =
-              tool.state.status === "running" || tool.state.status === "completed"
+              tool.state.status === "running" ||
+              tool.state.status === "completed"
                 ? tool.state.input
                 : {};
             return {
@@ -707,11 +741,12 @@ function applyEvent(port: number, event: RuntimeEvent) {
       break;
 
     case "session.next.tool.failed":
-      mutateMessages(port, event.properties.sessionID, (items) =>
+      mutateMessages(port, provider, event.properties.sessionID, (items) =>
         updateActiveAssistant(items, (assistant) =>
           updateLatestTool(assistant, event.properties.callID, (tool) => {
             const input =
-              tool.state.status === "running" || tool.state.status === "completed"
+              tool.state.status === "running" ||
+              tool.state.status === "completed"
                 ? tool.state.input
                 : {};
             const structured =
@@ -747,11 +782,11 @@ function applyEvent(port: number, event: RuntimeEvent) {
       break;
 
     case "session.next.retried":
-      revalidateMessages(port, event.properties.sessionID);
+      revalidateMessages(port, provider, event.properties.sessionID);
       break;
 
     case "session.next.compaction.started":
-      mutateMessages(port, event.properties.sessionID, (items) =>
+      mutateMessages(port, provider, event.properties.sessionID, (items) =>
         upsertMessage(items, {
           id: event.id,
           type: "compaction",
@@ -765,7 +800,7 @@ function applyEvent(port: number, event: RuntimeEvent) {
       break;
 
     case "session.next.compaction.delta":
-      mutateMessages(port, event.properties.sessionID, (items) => {
+      mutateMessages(port, provider, event.properties.sessionID, (items) => {
         const index = findLastIndex(
           items,
           (item) => item.type === "compaction",
@@ -782,7 +817,7 @@ function applyEvent(port: number, event: RuntimeEvent) {
       break;
 
     case "session.next.compaction.ended":
-      mutateMessages(port, event.properties.sessionID, (items) => {
+      mutateMessages(port, provider, event.properties.sessionID, (items) => {
         const index = findLastIndex(
           items,
           (item) => item.type === "compaction",
@@ -803,57 +838,61 @@ function applyEvent(port: number, event: RuntimeEvent) {
 
     case "message.updated":
     case "message.part.updated":
-      revalidateMessagesNow(port, event.properties.sessionID);
+      revalidateMessagesNow(port, provider, event.properties.sessionID);
       break;
 
     case "message.part.delta":
-      revalidateMessagesSoon(port, event.properties.sessionID);
+      revalidateMessagesSoon(port, provider, event.properties.sessionID);
       break;
 
     case "message.removed":
     case "message.part.removed":
-      revalidateMessagesNow(port, event.properties.sessionID);
+      revalidateMessagesNow(port, provider, event.properties.sessionID);
       break;
 
     case "session.compacted":
-      revalidateMessages(port, event.properties.sessionID);
+      revalidateMessages(port, provider, event.properties.sessionID);
       break;
 
     case "session.error":
       if (event.properties.sessionID) {
-        revalidateMessagesNow(port, event.properties.sessionID);
-        void mutate(sessionStatusKey(port));
+        revalidateMessagesNow(port, provider, event.properties.sessionID);
+        void mutate(sessionStatusKey(port, provider));
       }
       break;
 
     case "permission.asked":
-      mutatePermissions(port, (items) => upsertById(items, event.properties));
+      mutatePermissions(port, provider, (items) =>
+        upsertById(items, event.properties),
+      );
       break;
 
     case "permission.replied":
-      mutatePermissions(port, (items) =>
+      mutatePermissions(port, provider, (items) =>
         removeById(items, event.properties.requestID),
       );
       break;
 
     case "question.asked":
-      mutateQuestions(port, (items) => upsertById(items, event.properties));
+      mutateQuestions(port, provider, (items) =>
+        upsertById(items, event.properties),
+      );
       break;
 
     case "question.replied":
     case "question.rejected":
-      mutateQuestions(port, (items) =>
+      mutateQuestions(port, provider, (items) =>
         removeById(items, event.properties.requestID),
       );
       break;
 
     case "session.diff":
     case "vcs.branch.updated":
-      void mutate(gitDiffKey(port));
+      void mutate(gitDiffKey(port, provider));
       break;
 
     case "project.updated":
-      void mutate(currentProjectKey(port));
+      void mutate(currentProjectKey(port, provider));
       break;
   }
 }
@@ -866,7 +905,10 @@ function parseEvent(data: string): RuntimeEvent | null {
   }
 }
 
-export function useOpencodeEvents(port: number | null | undefined) {
+export function useOpencodeEvents(
+  port: number | null | undefined,
+  provider?: BackendProvider,
+) {
   const queueRef = useRef<RuntimeEvent[]>([]);
   const timerRef = useRef<number | null>(null);
 
@@ -878,7 +920,7 @@ export function useOpencodeEvents(port: number | null | undefined) {
       const events = queueRef.current;
       queueRef.current = [];
       for (const event of events) {
-        applyEvent(port, event);
+        applyEvent(port, provider, event);
       }
     };
 
@@ -888,7 +930,7 @@ export function useOpencodeEvents(port: number | null | undefined) {
       timerRef.current = window.setTimeout(flush, 16);
     };
 
-    const source = new EventSource(`/api/opencode/${port}/events`);
+    const source = new EventSource(`${backendBasePath(provider, port)}/events`);
 
     source.onmessage = (message) => {
       const event = parseEvent(message.data);
@@ -903,5 +945,5 @@ export function useOpencodeEvents(port: number | null | undefined) {
       }
       queueRef.current = [];
     };
-  }, [port]);
+  }, [port, provider]);
 }

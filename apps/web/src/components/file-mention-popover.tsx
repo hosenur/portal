@@ -2,6 +2,7 @@ import { DocumentIcon } from "@/components/icons/lucide";
 import { useEffect, useRef, useState } from "react";
 import useMediaQuery from "@/hooks/use-media-query";
 import { useInstanceStore } from "@/stores/instance-store";
+import { backendBasePath } from "@/lib/backend-url";
 
 interface FileResult {
   path: string;
@@ -125,6 +126,7 @@ export function FileMentionPopover({
   const { isMobile } = useMediaQuery();
   const instance = useInstanceStore((s) => s.instance);
   const port = instance?.port;
+  const apiBase = port ? backendBasePath(instance?.provider, port) : "";
 
   useEffect(() => {
     if (isOpen && mentionStart !== null && textareaRef.current) {
@@ -161,7 +163,7 @@ export function FileMentionPopover({
       setLoading(true);
       try {
         const response = await fetch(
-          `/api/opencode/${port}/files/search?q=${encodeURIComponent(searchQuery)}`,
+          `${apiBase}/files/search?q=${encodeURIComponent(searchQuery)}`,
           { signal: controller.signal },
         );
         if (response.ok) {
@@ -188,7 +190,7 @@ export function FileMentionPopover({
       clearTimeout(debounceTimer);
       controller.abort();
     };
-  }, [isOpen, searchQuery, port, onFilesChange]);
+  }, [isOpen, searchQuery, port, apiBase, onFilesChange]);
 
   useEffect(() => {
     if (listRef.current && files.length > 0) {

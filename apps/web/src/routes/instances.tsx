@@ -6,6 +6,8 @@ import {
   GlobeAltIcon,
   ServerIcon,
 } from "@/components/icons/lucide";
+import { ProviderIcon } from "@/components/icons/provider-icon";
+import type { BackendProvider } from "@/lib/backend-url";
 
 export const Route = createFileRoute("/instances")(
   /*#__PURE__*/ {
@@ -16,6 +18,7 @@ export const Route = createFileRoute("/instances")(
 interface InstanceData {
   id: string;
   name: string;
+  provider?: BackendProvider;
   directory: string;
   port: number;
   hostname: string;
@@ -108,6 +111,7 @@ function InstancesPage() {
       id: instance.id,
       name: instance.name,
       port: instance.port,
+      provider: instance.provider ?? "opencode",
     });
     navigate({ to: "/" });
   };
@@ -121,7 +125,7 @@ function InstancesPage() {
           Instances
         </h1>
         <p className="text-lg text-muted-fg">
-          Select an active OpenCode instance to connect.
+          Select an active backend instance to connect.
         </p>
       </div>
 
@@ -156,6 +160,10 @@ function InstancesPage() {
               const dirName = getDirectoryName(instance.directory);
               const directoryPath = formatDirectoryPath(instance.directory);
               const isRunning = instance.state === "running";
+              const backendLabel =
+                instance.provider === "claude"
+                  ? "managed"
+                  : `:${instance.port}`;
 
               return (
                 <div key={instance.id} role="listitem" className="min-w-0">
@@ -169,6 +177,14 @@ function InstancesPage() {
                       <div className="flex items-center justify-between gap-2">
                         <span className="min-w-0 flex-1 truncate text-base font-medium tracking-tight text-fg">
                           {dirName}
+                        </span>
+                        <span className="flex shrink-0 items-center gap-1 rounded border border-border/50 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-fg">
+                          <ProviderIcon
+                            provider={instance.provider}
+                            className="size-3"
+                            aria-hidden="true"
+                          />
+                          {instance.provider ?? "opencode"}
                         </span>
                       </div>
                       <span
@@ -205,7 +221,7 @@ function InstancesPage() {
                       )}
                       <span className="ml-auto flex shrink-0 items-center gap-1.5 font-medium tabular-nums text-muted-fg">
                         <GlobeAltIcon className="size-3.5" aria-hidden="true" />
-                        :{instance.port}
+                        {backendLabel}
                       </span>
                     </div>
                   </button>

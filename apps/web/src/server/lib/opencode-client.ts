@@ -12,7 +12,13 @@ function getHostnameForPort(port: number): string {
     if (existsSync(CONFIG_PATH)) {
       const config = JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
       const instance = config.instances?.find(
-        (i: { opencodePort: number }) => i.opencodePort === port
+        (i: {
+          opencodePort: number;
+          backendPort?: number;
+          provider?: string;
+        }) =>
+          (i.provider ?? "opencode") === "opencode" &&
+          (i.backendPort ?? i.opencodePort) === port,
       );
       if (instance?.hostname && instance.hostname !== "0.0.0.0") {
         return instance.hostname;

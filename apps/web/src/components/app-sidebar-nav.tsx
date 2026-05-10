@@ -14,6 +14,7 @@ import { useModelStore } from "@/stores/model-store";
 import { useBreadcrumb } from "@/contexts/breadcrumb-context";
 import { mutateSessionMessages } from "@/hooks/use-session-messages";
 import { useSessions } from "@/hooks/use-opencode";
+import { backendBasePath } from "@/lib/backend-url";
 
 const CREATE_PR_PROMPT = `Use gh CLI to create a pull request. Follow these steps:
 
@@ -64,6 +65,8 @@ Make sure to:
 export function AppSidebarNav() {
   const instance = useInstanceStore((s) => s.instance);
   const port = instance?.port ?? 0;
+  const provider = instance?.provider;
+  const apiBase = port ? backendBasePath(provider, port) : "";
   const { pageTitle } = useBreadcrumb();
   const selectedModel = useModelStore((s) => s.selectedModel);
   const { mutate: mutateSessions } = useSessions();
@@ -84,26 +87,23 @@ export function AppSidebarNav() {
       return;
     }
 
-    const response = await fetch(
-      `/api/opencode/${port}/session/${sessionId}/prompt`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text: prompt,
-          model:
-            selectedModel.providerID && selectedModel.modelID
-              ? selectedModel
-              : undefined,
-        }),
-      },
-    );
+    const response = await fetch(`${apiBase}/session/${sessionId}/prompt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text: prompt,
+        model:
+          selectedModel.providerID && selectedModel.modelID
+            ? selectedModel
+            : undefined,
+      }),
+    });
 
     if (!response.ok) {
       throw new Error("Failed to send request");
     }
 
-    mutateSessionMessages(port, sessionId);
+    mutateSessionMessages(port, sessionId, provider);
     mutateSessions();
   };
 

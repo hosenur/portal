@@ -4,7 +4,7 @@ import { homedir } from "os";
 import { basename, join } from "path";
 import { readFileSync, existsSync } from "fs";
 import { promisify } from "util";
-import { isContainerRunning } from "./lib/docker";
+import { getProcessCwd } from "./lib/process-cwd";
 
 const CONFIG_PATH = join(homedir(), ".portal.json");
 const execFileAsync = promisify(execFile);
@@ -16,12 +16,16 @@ const SESSION_STATS_DISPLAY_LIMIT = SESSION_STATS_COUNT_LIMIT - 1;
 
 type InstanceType = "process" | "docker";
 type InstanceSource = "config" | "discovered";
+type Provider = "opencode" | "codex" | "claude";
 
 interface PortalInstance {
   id: string;
   name: string;
   directory: string;
   port: number | null;
+  provider?: Provider;
+  backendPort?: number;
+  backendPid?: number | null;
   opencodePort: number;
   hostname: string;
   opencodePid: number | null;
@@ -29,6 +33,9 @@ interface PortalInstance {
   startedAt: string;
   instanceType: InstanceType;
   containerId: string | null;
+  claudeBinaryPath?: string;
+  claudeHomePath?: string;
+  claudeLaunchArgs?: string;
 }
 
 interface ListeningPort {
@@ -68,6 +75,9 @@ function readConfig(): PortalConfig {
       const config = JSON.parse(content);
       config.instances = config.instances.map((instance: PortalInstance) => ({
         ...instance,
+        provider: instance.provider ?? "opencode",
+        backendPort: instance.backendPort ?? instance.opencodePort,
+        backendPid: instance.backendPid ?? instance.opencodePid ?? null,
         instanceType: instance.instanceType || "process",
         containerId: instance.containerId || null,
         opencodePid: instance.opencodePid ?? null,
@@ -92,6 +102,18 @@ function isProcessRunning(pid: number | null): boolean {
   } catch {
     return false;
   }
+}
+
+function getInstanceProvider(instance: PortalInstance): Provider {
+  return instance.provider ?? "opencode";
+}
+
+function getInstanceBackendPort(instance: PortalInstance): number {
+  return instance.backendPort ?? instance.opencodePort;
+}
+
+function getInstanceBackendPid(instance: PortalInstance): number | null {
+  return instance.backendPid ?? instance.opencodePid ?? null;
 }
 
 async function runCommand(command: string, args: string[]): Promise<string> {
@@ -230,6 +252,85 @@ async function fetchJson<T>(
   }
 }
 
+async function fetchOk(url: string, timeoutMs = PROBE_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+    });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function verifyCodexAppServer(host: string, port: number) {
+  const url = `ws://${formatUrlHost(host)}:${port}`;
+
+  return new Promise<boolean>((resolve) => {
+    let settled = false;
+    let socket: WebSocket | undefined;
+    const settle = (result: boolean, socket?: WebSocket) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      try {
+        socket?.close();
+      } catch {
+        // Ignore close errors during best-effort discovery.
+      }
+      resolve(result);
+    };
+
+    const timeout = setTimeout(() => settle(false, socket), PROBE_TIMEOUT_MS);
+
+    try {
+      socket = new WebSocket(url);
+    } catch {
+      clearTimeout(timeout);
+      resolve(false);
+      return;
+    }
+
+    socket.addEventListener("open", () => {
+      socket?.send(
+        JSON.stringify({
+          id: 1,
+          method: "initialize",
+          params: {
+            clientInfo: {
+              name: "openportal_discovery",
+              title: "OpenPortal Discovery",
+              version: "0.1.0",
+            },
+          },
+        }),
+      );
+    });
+
+    socket.addEventListener("message", (message) => {
+      try {
+        const data = JSON.parse(String(message.data));
+        settle(
+          data?.id === 1 &&
+            typeof data?.result?.userAgent === "string" &&
+            typeof data?.result?.platformOs === "string",
+          socket,
+        );
+      } catch {
+        settle(false, socket);
+      }
+    });
+
+    socket.addEventListener("error", () => settle(false, socket));
+    socket.addEventListener("close", () => settle(false, socket));
+  });
+}
+
 function getTimestamp(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
@@ -278,9 +379,7 @@ async function fetchSessionStats(
   baseUrl: string,
   directory?: string,
 ): Promise<SessionStats | null> {
-  const headers = directory
-    ? { "x-opencode-directory": directory }
-    : undefined;
+  const headers = directory ? { "x-opencode-directory": directory } : undefined;
   const sessions =
     (await fetchSessionList(baseUrl, headers, true)) ??
     (await fetchSessionList(baseUrl, headers, false));
@@ -338,12 +437,44 @@ async function probeOpenCode(
   return null;
 }
 
+async function probeCodex(
+  port: number,
+  hosts: string[],
+  directory?: string,
+): Promise<ProbeResult | null> {
+  const uniqueHosts = [...new Set(hosts)];
+
+  for (const host of uniqueHosts) {
+    const baseUrl = `http://${formatUrlHost(host)}:${port}`;
+    const ready = await fetchOk(`${baseUrl}/readyz`);
+    const healthy = ready || (await fetchOk(`${baseUrl}/healthz`));
+    if (!healthy) continue;
+    const isCodex = await verifyCodexAppServer(host, port);
+    if (!isCodex) continue;
+
+    return {
+      host,
+      port,
+      version: "codex app-server",
+      project: directory
+        ? {
+            name: directoryName(directory),
+            worktree: directory,
+          }
+        : null,
+      sessionStats: null,
+    };
+  }
+
+  return null;
+}
+
 function directoryName(directory: string): string {
   const normalized = directory.replace(/\\+/g, "/").replace(/\/+$/g, "");
   return basename(normalized) || directory;
 }
 
-function createDiscoveredInstance(
+function createDiscoveredOpenCodeInstance(
   probe: ProbeResult,
   listener?: ListeningPort,
 ) {
@@ -356,6 +487,7 @@ function createDiscoveredInstance(
 
   return {
     id: `opencode-${probe.host}-${probe.port}`,
+    provider: "opencode" as const,
     name,
     directory,
     port: probe.port,
@@ -373,9 +505,44 @@ function createDiscoveredInstance(
   };
 }
 
-async function discoverOpenCodeServers(
-  configuredPorts: Set<number>,
-): Promise<ReturnType<typeof createDiscoveredInstance>[]> {
+function createDiscoveredCodexInstance(
+  probe: ProbeResult,
+  listener?: ListeningPort,
+) {
+  const directory = probe.project?.worktree ?? "Unknown directory";
+  const name =
+    probe.project?.name ??
+    (probe.project?.worktree
+      ? directoryName(probe.project.worktree)
+      : `Codex :${probe.port}`);
+
+  return {
+    id: `codex-${probe.host}-${probe.port}`,
+    provider: "codex" as const,
+    name,
+    directory,
+    port: probe.port,
+    hostname: probe.host,
+    opencodePid: null,
+    backendPid: listener?.pid ?? null,
+    webPid: null,
+    startedAt: null,
+    instanceType: "process" as const,
+    containerId: null,
+    source: "discovered" as const,
+    version: probe.version,
+    sessionStats: probe.sessionStats,
+    state: "running" as const,
+    status: `Discovered on ${probe.host}:${probe.port}`,
+  };
+}
+
+async function discoverBackendServers(): Promise<
+  Array<
+    | ReturnType<typeof createDiscoveredOpenCodeInstance>
+    | ReturnType<typeof createDiscoveredCodexInstance>
+  >
+> {
   const listeners = await getListeningPorts();
   const listenersByPort = new Map<number, ListeningPort>();
 
@@ -388,88 +555,88 @@ async function discoverOpenCodeServers(
   const probePorts = [...new Set(listeners.map((listener) => listener.port))];
   const discovered = await Promise.all(
     probePorts.map(async (port) => {
-      if (configuredPorts.has(port)) return null;
-
       const listenersForPort = listeners.filter(
         (listener) => listener.port === port,
       );
       const hosts = listenersForPort.flatMap((listener) =>
         getProbeHosts(listener.host),
       );
-      const probe = await probeOpenCode(
-        port,
-        hosts.length ? hosts : ["localhost"],
-      );
-      if (!probe) return null;
+      const probeHosts = hosts.length ? hosts : ["localhost"];
+      const listener = listenersByPort.get(port);
+      const matches: Array<
+        | ReturnType<typeof createDiscoveredOpenCodeInstance>
+        | ReturnType<typeof createDiscoveredCodexInstance>
+      > = [];
 
-      return createDiscoveredInstance(probe, listenersByPort.get(port));
+      const opencodeProbe = await probeOpenCode(port, probeHosts);
+      if (opencodeProbe) {
+        matches.push(createDiscoveredOpenCodeInstance(opencodeProbe, listener));
+      }
+
+      const codexProbe = await probeCodex(port, probeHosts);
+      if (codexProbe) {
+        const directory = getProcessCwd(listener?.pid);
+        matches.push(
+          createDiscoveredCodexInstance(
+            {
+              ...codexProbe,
+              project: directory
+                ? {
+                    name: directoryName(directory),
+                    worktree: directory,
+                  }
+                : codexProbe.project,
+            },
+            listener,
+          ),
+        );
+      }
+
+      return matches;
     }),
   );
 
-  return discovered.filter((instance) => instance !== null);
+  return discovered.flat();
 }
 
 export default defineHandler(async () => {
   const config = readConfig();
-  const configuredPorts = new Set(
-    config.instances.map((instance) => instance.opencodePort),
-  );
+  const claudeInstances = config.instances.flatMap((instance) => {
+    const provider = getInstanceProvider(instance);
+    if (provider !== "claude") return [];
 
-  const instancePromises = config.instances.map(async (instance) => {
-    let opencodeRunning = false;
-    if (instance.instanceType === "docker") {
-      opencodeRunning = await isContainerRunning(instance.containerId);
-    } else {
-      opencodeRunning = isProcessRunning(instance.opencodePid);
-    }
+    const backendPid = getInstanceBackendPid(instance);
+    const backendRunning = isProcessRunning(backendPid);
     const webRunning = isProcessRunning(instance.webPid);
-    const probe = await probeOpenCode(
-      instance.opencodePort,
-      [
-        instance.hostname && instance.hostname !== "0.0.0.0"
-          ? instance.hostname
-          : "localhost",
-        "127.0.0.1",
-      ],
-      instance.directory,
-    );
+    if (!backendRunning && !webRunning) return [];
 
-    if (!opencodeRunning && !probe) {
-      return null;
-    }
+    const backendPort = getInstanceBackendPort(instance);
 
     return {
       id: instance.id,
-      name:
-        instance.name ||
-        probe?.project?.name ||
-        directoryName(instance.directory),
-      directory: probe?.project?.worktree ?? instance.directory,
-      port: instance.opencodePort,
+      provider,
+      name: instance.name || directoryName(instance.directory),
+      directory: instance.directory,
+      port: backendPort,
       hostname: instance.hostname,
-      opencodePid: instance.opencodePid,
+      opencodePid: null,
+      backendPid,
       webPid: instance.webPid,
       startedAt: instance.startedAt,
       instanceType: instance.instanceType,
       containerId: instance.containerId,
       source: "config" as InstanceSource,
-      version: probe?.version ?? null,
-      sessionStats: probe?.sessionStats ?? null,
+      version: "claude sdk",
+      sessionStats: null,
       state: "running" as const,
-      status: instance.startedAt
-        ? `Running since ${new Date(instance.startedAt).toLocaleString()}`
-        : `Running on ${instance.hostname}:${instance.opencodePort}`,
+      status: webRunning && instance.startedAt
+        ? `Managed by OpenPortal since ${new Date(instance.startedAt).toLocaleString()}`
+        : "Registered by openportal run",
     };
   });
 
-  const [configuredResults, discoveredInstances] = await Promise.all([
-    Promise.all(instancePromises),
-    discoverOpenCodeServers(configuredPorts),
-  ]);
-  const instances = [
-    ...configuredResults.filter((instance) => instance !== null),
-    ...discoveredInstances,
-  ];
+  const discoveredInstances = await discoverBackendServers();
+  const instances = [...claudeInstances, ...discoveredInstances];
 
   return {
     total: instances.length,

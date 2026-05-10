@@ -51,6 +51,7 @@ import {
   useSessions,
 } from "@/hooks/use-opencode";
 import { getErrorMessage, getResponseErrorMessage } from "@/lib/error-message";
+import { backendBasePath, type BackendProvider } from "@/lib/backend-url";
 import type { Agent, Session, SessionMessage } from "@opencode-ai/sdk/v2";
 
 export const Route = createFileRoute("/_app/session/$id")({
@@ -343,6 +344,7 @@ function QuestionAnswerForm({
   questions,
   partKey,
   port,
+  provider,
   sessionId,
   callID,
   pendingQuestions,
@@ -351,6 +353,7 @@ function QuestionAnswerForm({
   questions: QuestionInfo[];
   partKey: string;
   port: number;
+  provider?: BackendProvider;
   sessionId: string;
   callID: string;
   pendingQuestions: QuestionRequest[];
@@ -383,12 +386,13 @@ function QuestionAnswerForm({
     setSubmitError(null);
 
     try {
+      const apiBase = backendBasePath(provider, port);
       let match =
         pendingQuestions.find((q) => q.tool?.callID === callID) ??
         pendingQuestions.find((q) => q.sessionID === sessionId);
 
       if (!match) {
-        const listRes = await fetch(`/api/opencode/${port}/questions`);
+        const listRes = await fetch(`${apiBase}/questions`);
         if (!listRes.ok) throw new Error("Failed to fetch pending questions");
         const latestQuestions = (await listRes.json()) as QuestionRequest[];
         match =
@@ -411,19 +415,16 @@ function QuestionAnswerForm({
         return [];
       });
 
-      const replyRes = await fetch(
-        `/api/opencode/${port}/question/${match.id}/reply`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ answers }),
-        },
-      );
+      const replyRes = await fetch(`${apiBase}/question/${match.id}/reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answers }),
+      });
 
       if (!replyRes.ok) throw new Error("Failed to submit answers");
 
       onResolved(match.id);
-      mutateSessionMessages(port, sessionId);
+      mutateSessionMessages(port, sessionId, provider);
     } catch (err) {
       setSubmitError(
         err instanceof Error ? err.message : "Failed to submit answers",
@@ -531,10 +532,12 @@ function QuestionAnswerForm({
 function PermissionRequestForm({
   permission,
   port,
+  provider,
   onResolved,
 }: {
   permission: PermissionRequest;
   port: number;
+  provider?: BackendProvider;
   onResolved: (requestId: string) => void;
 }) {
   const [submitting, setSubmitting] = useState<PermissionReply | null>(null);
@@ -545,8 +548,9 @@ function PermissionRequestForm({
     setSubmitError(null);
 
     try {
+      const apiBase = backendBasePath(provider, port);
       const response = await fetch(
-        `/api/opencode/${port}/permission/${permission.id}/reply`,
+        `${apiBase}/permission/${permission.id}/reply`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -616,12 +620,14 @@ function PermissionRequestForm({
 const ToolCallItem = memo(function ToolCallItem({
   part,
   port,
+  provider,
   sessionId,
   pendingQuestions,
   onQuestionResolved,
 }: {
   part: ToolPart;
   port: number;
+  provider?: BackendProvider;
   sessionId: string;
   pendingQuestions: QuestionRequest[];
   onQuestionResolved: (requestId: string) => void;
@@ -658,6 +664,7 @@ const ToolCallItem = memo(function ToolCallItem({
             questions={questions}
             partKey={part.callID || part.id}
             port={port}
+            provider={provider}
             sessionId={sessionId}
             callID={part.callID || ""}
             pendingQuestions={pendingQuestions}
@@ -698,6 +705,7 @@ const ToolCallItem = memo(function ToolCallItem({
 const MessageItem = memo(function MessageItem({
   message,
   port,
+  provider,
   sessionId,
   pendingPermissions,
   pendingQuestions,
@@ -706,6 +714,7 @@ const MessageItem = memo(function MessageItem({
 }: {
   message: MessageWithParts;
   port: number;
+  provider?: BackendProvider;
   sessionId: string;
   pendingPermissions: PermissionRequest[];
   pendingQuestions: QuestionRequest[];
@@ -760,6 +769,7 @@ const MessageItem = memo(function MessageItem({
               key={part.callID || part.id}
               part={part}
               port={port}
+              provider={provider}
               sessionId={sessionId}
               pendingQuestions={pendingQuestions}
               onQuestionResolved={onQuestionResolved}
@@ -774,6 +784,7 @@ const MessageItem = memo(function MessageItem({
               key={permission.id}
               permission={permission}
               port={port}
+              provider={provider}
               onResolved={onPermissionResolved}
             />
           ))}
@@ -795,6 +806,8 @@ function SessionPage() {
   const { id: sessionId } = Route.useParams();
   const instance = useInstanceStore((s) => s.instance);
   const port = instance?.port ?? 0;
+  const provider = instance?.provider;
+  const apiBase = port ? backendBasePath(provider, port) : "";
 
   const {
     messages,
@@ -893,10 +906,10 @@ function SessionPage() {
         { revalidate: false },
       );
       if (port && sessionId) {
-        mutateSessionMessages(port, sessionId);
+        mutateSessionMessages(port, sessionId, provider);
       }
     },
-    [port, sessionId, mutatePermissions],
+    [port, provider, sessionId, mutatePermissions],
   );
 
   const handleQuestionResolved = useCallback(
@@ -907,10 +920,10 @@ function SessionPage() {
         { revalidate: false },
       );
       if (port && sessionId) {
-        mutateSessionMessages(port, sessionId);
+        mutateSessionMessages(port, sessionId, provider);
       }
     },
-    [port, sessionId, mutateQuestions],
+    [port, provider, sessionId, mutateQuestions],
   );
 
   const visibleMessageIds = useMemo(
@@ -988,22 +1001,19 @@ function SessionPage() {
             ? selectedAgent
             : undefined;
 
-        const response = await fetch(
-          `/api/opencode/${port}/session/${sessionId}/prompt`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              messageID: messageId,
-              text: messageText,
-              model:
-                selectedModel.providerID && selectedModel.modelID
-                  ? selectedModel
-                  : undefined,
-              agent: agentOverride,
-            }),
-          },
-        );
+        const response = await fetch(`${apiBase}/session/${sessionId}/prompt`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messageID: messageId,
+            text: messageText,
+            model:
+              selectedModel.providerID && selectedModel.modelID
+                ? selectedModel
+                : undefined,
+            agent: agentOverride,
+          }),
+        });
 
         if (!response.ok) {
           const fallback = `Failed to send message (${response.status}${
@@ -1019,25 +1029,28 @@ function SessionPage() {
             sessionId,
             messageId,
             result.message,
+            provider,
           );
         } else {
-          settleOptimisticMessage(port, sessionId, messageId);
+          settleOptimisticMessage(port, sessionId, messageId, provider);
         }
 
         isNearBottomRef.current = true;
-        mutateSessionMessages(port, sessionId);
+        mutateSessionMessages(port, sessionId, provider);
         mutateSessionStatuses();
         mutateSessions();
       } catch (err) {
         setSendError(
           err instanceof Error ? err.message : "Failed to send message",
         );
-        removeOptimisticMessage(port, sessionId, messageId);
+        removeOptimisticMessage(port, sessionId, messageId, provider);
       }
     },
     [
       sessionId,
       port,
+      provider,
+      apiBase,
       currentSession?.agent,
       agents,
       selectedAgent,
@@ -1086,7 +1099,7 @@ function SessionPage() {
       ],
       isQueued: sending,
     };
-    addOptimisticMessage(port, sessionId, optimisticMessage);
+    addOptimisticMessage(port, sessionId, optimisticMessage, provider);
 
     void sendMessage(messageText, messageId).finally(() => {
       submitLockRef.current = false;
@@ -1106,11 +1119,11 @@ function SessionPage() {
     if (!sending || !port || !sessionId) return;
 
     const interval = window.setInterval(() => {
-      mutateSessionMessages(port, sessionId);
+      mutateSessionMessages(port, sessionId, provider);
     }, 1500);
 
     return () => window.clearInterval(interval);
-  }, [port, sending, sessionId]);
+  }, [port, provider, sending, sessionId]);
 
   return (
     <div className="flex h-full flex-col -m-4">
@@ -1144,6 +1157,7 @@ function SessionPage() {
                 key={message.info.id}
                 message={message}
                 port={port}
+                provider={provider}
                 sessionId={sessionId}
                 pendingPermissions={pendingPermissions}
                 pendingQuestions={pendingQuestions}
@@ -1158,6 +1172,7 @@ function SessionPage() {
                   key={permission.id}
                   permission={permission}
                   port={port}
+                  provider={provider}
                   onResolved={handlePermissionResolved}
                 />
               ))}

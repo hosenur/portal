@@ -5,12 +5,12 @@ import {
   EllipsisHorizontalIcon,
   FileDiffIcon,
   HomeIcon,
-  IconBox,
   LifebuoyIcon,
   PlusIcon,
   ShieldCheckIcon,
   TrashIcon,
 } from "@/components/icons/lucide";
+import { ProviderIcon } from "@/components/icons/provider-icon";
 import { useEffect, useState, useMemo } from "react";
 import { parsePatchFiles } from "@pierre/diffs";
 import { Avatar } from "@/components/ui/avatar";
@@ -57,10 +57,12 @@ import {
 import { useInstanceStore } from "@/stores/instance-store";
 import { useNavigate, useMatch } from "@tanstack/react-router";
 import type { Session } from "@opencode-ai/sdk/v2";
+import type { BackendProvider } from "@/lib/backend-url";
 
 interface InstanceData {
   id: string;
   name: string;
+  provider?: BackendProvider;
   directory: string;
   port: number;
 }
@@ -115,6 +117,7 @@ function InstanceSwitcher() {
       id: selected.id,
       name: selected.name,
       port: selected.port,
+      provider: selected.provider ?? "opencode",
     });
     setInputValue(selected.name);
     navigate({ to: "/" });
@@ -132,7 +135,8 @@ function InstanceSwitcher() {
       >
         <ComboBoxInput
           prefix={
-            <IconBox
+            <ProviderIcon
+              provider={instance?.provider}
               data-slot="icon"
               className="size-4 text-muted-fg"
               aria-hidden="true"
@@ -143,11 +147,18 @@ function InstanceSwitcher() {
         />
         <ComboBoxContent
           items={filteredInstances}
-          popover={{ placement: "bottom start", className: "w-(--trigger-width)" }}
+          popover={{
+            placement: "bottom start",
+            className: "w-(--trigger-width)",
+          }}
         >
           {(item) => (
             <ComboBoxItem id={item.id} textValue={item.name}>
-              <IconBox data-slot="icon" className="size-4" />
+              <ProviderIcon
+                provider={item.provider}
+                data-slot="icon"
+                className="size-4"
+              />
               <ComboBoxLabel className="min-w-0 truncate">
                 {item.name}
               </ComboBoxLabel>

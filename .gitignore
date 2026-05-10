@@ -28,6 +28,8 @@ out/
 build
 dist
 
+# Local reference clones
+t3code/
 
 # Debug
 npm-debug.log*

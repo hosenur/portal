@@ -1,10 +1,11 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import type { BackendProvider } from "@/lib/backend-url";
 
 export interface Instance {
   id: string;
   name: string;
   port: number;
+  provider?: BackendProvider;
 }
 
 interface InstanceState {
@@ -13,15 +14,14 @@ interface InstanceState {
   clearInstance: () => void;
 }
 
+if (typeof window !== "undefined") {
+  window.localStorage.removeItem("opencode-instance");
+}
+
 export const useInstanceStore = create<InstanceState>()(
-  persist(
-    (set) => ({
-      instance: null,
-      setInstance: (instance) => set({ instance }),
-      clearInstance: () => set({ instance: null }),
-    }),
-    {
-      name: "opencode-instance",
-    },
-  ),
+  (set) => ({
+    instance: null,
+    setInstance: (instance) => set({ instance }),
+    clearInstance: () => set({ instance: null }),
+  }),
 );

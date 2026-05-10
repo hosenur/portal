@@ -22,8 +22,21 @@ import type {
 } from "@opencode-ai/sdk/v2";
 import { useInstanceStore } from "@/stores/instance-store";
 import { getErrorMessage } from "@/lib/error-message";
+import { backendBasePath, type BackendProvider } from "@/lib/backend-url";
 
-export type { Message, Part, ToolPart, ToolState, TextPart, PermissionRequest, QuestionAnswer, QuestionInfo, QuestionOption, QuestionRequest, SessionMessage };
+export type {
+  Message,
+  Part,
+  ToolPart,
+  ToolState,
+  TextPart,
+  PermissionRequest,
+  QuestionAnswer,
+  QuestionInfo,
+  QuestionOption,
+  QuestionRequest,
+  SessionMessage,
+};
 
 export interface MessageWithParts {
   info: Message;
@@ -56,16 +69,22 @@ const fetcher = async (url: string): Promise<SessionMessage[]> => {
   return normalizeFetchedMessages(data);
 };
 
-function usePort() {
+function useBackend() {
   const instance = useInstanceStore((s) => s.instance);
-  return instance?.port ?? null;
+  return instance
+    ? {
+        port: instance.port,
+        provider: instance.provider,
+        basePath: backendBasePath(instance.provider, instance.port),
+      }
+    : null;
 }
 
 export function useSessionMessages(sessionId: string | undefined) {
-  const port = usePort();
+  const backend = useBackend();
   const key =
-    port && sessionId
-      ? `/api/opencode/${port}/session/${sessionId}/messages`
+    backend && sessionId
+      ? `${backend.basePath}/session/${sessionId}/messages`
       : null;
 
   const {
@@ -92,18 +111,39 @@ export function useSessionMessages(sessionId: string | undefined) {
   };
 }
 
-export function getMessagesKey(port: number, sessionId: string) {
-  return `/api/opencode/${port}/session/${sessionId}/messages`;
+export function getMessagesKey(
+  port: number,
+  sessionId: string,
+  provider?: BackendProvider,
+) {
+  return `${backendBasePath(provider, port)}/session/${sessionId}/messages`;
 }
 
-export function mutateSessionMessages(port: number, sessionId: string) {
-  mutate(getMessagesKey(port, sessionId));
+export function mutateSessionMessages(
+  port: number,
+  sessionId: string,
+  provider?: BackendProvider,
+) {
+  mutate(getMessagesKey(port, sessionId, provider));
 }
 
 export function sortSessionMessages(messages: SessionMessage[]) {
-  return [...messages].sort(
-    (a, b) => a.time.created - b.time.created || a.id.localeCompare(b.id),
-  );
+  return messages
+    .map((message, index) => ({ message, index }))
+    .sort(
+      (a, b) => {
+        const timeDiff = a.message.time.created - b.message.time.created;
+        if (timeDiff !== 0) return timeDiff;
+        if (a.message.type === "user" && b.message.type === "assistant") {
+          return -1;
+        }
+        if (a.message.type === "assistant" && b.message.type === "user") {
+          return 1;
+        }
+        return a.index - b.index;
+      },
+    )
+    .map((item) => item.message);
 }
 
 function normalizeFetchedMessages(data: unknown) {
@@ -290,7 +330,9 @@ function legacyTokensToSession(
   };
 }
 
-function legacyMessageToSessionMessage(message: MessageWithParts): SessionMessage {
+function legacyMessageToSessionMessage(
+  message: MessageWithParts,
+): SessionMessage {
   if (message.info.role === "user") {
     return {
       id: message.info.id,
@@ -467,7 +509,10 @@ function textPart(
 }
 
 function reasoningPart(
-  item: Extract<SessionMessageAssistant["content"][number], { type: "reasoning" }>,
+  item: Extract<
+    SessionMessageAssistant["content"][number],
+    { type: "reasoning" }
+  >,
   sessionId: string,
   message: SessionMessageAssistant,
 ): ReasoningPart {
@@ -616,7 +661,12 @@ function assistantParts(
   message.content.forEach((item, index) => {
     if (item.type === "text") {
       parts.push(
-        textPart(`${message.id}-text-${index}`, sessionId, message.id, item.text),
+        textPart(
+          `${message.id}-text-${index}`,
+          sessionId,
+          message.id,
+          item.text,
+        ),
       );
       return;
     }
@@ -629,7 +679,9 @@ function assistantParts(
     parts.push(toolPart(item, sessionId, message.id));
 
     if (item.state.status === "completed") {
-      parts.push(...fileAttachments(item.state.attachments, sessionId, message.id));
+      parts.push(
+        ...fileAttachments(item.state.attachments, sessionId, message.id),
+      );
     }
   });
 
@@ -640,65 +692,73 @@ export function sessionMessagesToLegacy(
   messages: SessionMessage[],
   sessionId: string,
 ): MessageWithParts[] {
-  return sortSessionMessages(messages).flatMap((message): MessageWithParts[] => {
-    switch (message.type) {
-      case "user":
-        return [
-          {
-            info: legacyUserInfo(message, sessionId),
-            parts: [
-              textPart(`${message.id}-text`, sessionId, message.id, message.text),
-            ],
-            isQueued: message.metadata?.portalQueued === true,
-          },
-        ];
+  return sortSessionMessages(messages).flatMap(
+    (message): MessageWithParts[] => {
+      switch (message.type) {
+        case "user":
+          return [
+            {
+              info: legacyUserInfo(message, sessionId),
+              parts: [
+                textPart(
+                  `${message.id}-text`,
+                  sessionId,
+                  message.id,
+                  message.text,
+                ),
+              ],
+              isQueued: message.metadata?.portalQueued === true,
+            },
+          ];
 
-      case "assistant":
-        return [
-          {
-            info: legacyAssistantInfo(message, sessionId),
-            parts: assistantParts(message, sessionId),
-          },
-        ];
+        case "assistant":
+          return [
+            {
+              info: legacyAssistantInfo(message, sessionId),
+              parts: assistantParts(message, sessionId),
+            },
+          ];
 
-      case "synthetic":
-        return [
-          {
-            info: syntheticAssistantInfo(message, sessionId),
-            parts: [
-              textPart(
-                `${message.id}-synthetic`,
-                sessionId,
-                message.id,
-                message.text,
-                true,
-              ),
-            ],
-          },
-        ];
+        case "synthetic":
+          return [
+            {
+              info: syntheticAssistantInfo(message, sessionId),
+              parts: [
+                textPart(
+                  `${message.id}-synthetic`,
+                  sessionId,
+                  message.id,
+                  message.text,
+                  true,
+                ),
+              ],
+            },
+          ];
 
-      case "shell":
-        return [
-          {
-            info: shellAssistantInfo(message, sessionId),
-            parts: [shellToolPart(message, sessionId)],
-          },
-        ];
+        case "shell":
+          return [
+            {
+              info: shellAssistantInfo(message, sessionId),
+              parts: [shellToolPart(message, sessionId)],
+            },
+          ];
 
-      case "agent-switched":
-      case "model-switched":
-      case "compaction":
-        return [];
-    }
-  });
+        case "agent-switched":
+        case "model-switched":
+        case "compaction":
+          return [];
+      }
+    },
+  );
 }
 
 export function addOptimisticMessage(
   port: number,
   sessionId: string,
   message: MessageWithParts,
+  provider?: BackendProvider,
 ): () => void {
-  const key = getMessagesKey(port, sessionId);
+  const key = getMessagesKey(port, sessionId, provider);
   let previousMessages: SessionMessage[] = [];
   const optimisticMessage: SessionMessage = {
     id: message.info.id,
@@ -733,8 +793,9 @@ export function reconcileOptimisticMessage(
   sessionId: string,
   optimisticId: string,
   actualMessage: SessionMessage,
+  provider?: BackendProvider,
 ) {
-  const key = getMessagesKey(port, sessionId);
+  const key = getMessagesKey(port, sessionId, provider);
 
   mutate(
     key,
@@ -759,8 +820,9 @@ export function settleOptimisticMessage(
   port: number,
   sessionId: string,
   messageId: string,
+  provider?: BackendProvider,
 ) {
-  const key = getMessagesKey(port, sessionId);
+  const key = getMessagesKey(port, sessionId, provider);
 
   mutate(
     key,
@@ -788,8 +850,9 @@ export function updateOptimisticMessage(
   sessionId: string,
   messageId: string,
   updates: Partial<MessageWithParts>,
+  provider?: BackendProvider,
 ) {
-  const key = getMessagesKey(port, sessionId);
+  const key = getMessagesKey(port, sessionId, provider);
 
   mutate(
     key,
@@ -800,7 +863,9 @@ export function updateOptimisticMessage(
 
         return {
           ...message,
-          ...(updates.parts ? { text: legacyTextFromParts(updates.parts) } : {}),
+          ...(updates.parts
+            ? { text: legacyTextFromParts(updates.parts) }
+            : {}),
           metadata: {
             ...(message.metadata ?? {}),
             ...("isQueued" in updates
@@ -818,8 +883,9 @@ export function removeOptimisticMessage(
   port: number,
   sessionId: string,
   messageId: string,
+  provider?: BackendProvider,
 ) {
-  const key = getMessagesKey(port, sessionId);
+  const key = getMessagesKey(port, sessionId, provider);
 
   mutate(
     key,

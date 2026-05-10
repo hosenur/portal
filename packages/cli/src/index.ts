@@ -19,21 +19,32 @@ const __dirname = dirname(__filename);
 const CONFIG_PATH = join(homedir(), ".portal.json");
 const CONFIG_LOCK_PATH = `${CONFIG_PATH}.lock`;
 const DEFAULT_HOSTNAME = "0.0.0.0";
+const DEFAULT_CODEX_HOSTNAME = "127.0.0.1";
 const DEFAULT_PORT = 3000;
 const DEFAULT_OPENCODE_PORT = 4000;
+const DEFAULT_CODEX_PORT = 4500;
+const DEFAULT_CLAUDE_PORT = 4600;
 
 const WEB_SERVER_PATH = join(__dirname, "..", "web", "server", "index.mjs");
+
+type Provider = "opencode" | "codex" | "claude";
 
 interface PortalInstance {
   id: string;
   name: string;
   directory: string;
   port: number | null;
+  provider?: Provider;
+  backendPort?: number;
+  backendPid?: number | null;
   opencodePort: number;
   hostname: string;
   opencodePid: number | null;
   webPid: number | null;
   startedAt: string;
+  claudeBinaryPath?: string;
+  claudeHomePath?: string;
+  claudeLaunchArgs?: string;
 }
 
 interface PortalConfig {
@@ -46,6 +57,9 @@ function readConfig(): PortalConfig {
       const config = JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
       config.instances = config.instances.map((instance: PortalInstance) => ({
         ...instance,
+        provider: instance.provider ?? "opencode",
+        backendPort: instance.backendPort ?? instance.opencodePort,
+        backendPid: instance.backendPid ?? instance.opencodePid ?? null,
         opencodePid: instance.opencodePid ?? null,
         webPid: instance.webPid ?? null,
       }));
@@ -145,21 +159,61 @@ function isProcessRunning(pid: number | null): boolean {
   }
 }
 
+function getInstanceProvider(instance: PortalInstance): Provider {
+  return instance.provider ?? "opencode";
+}
+
+function getInstanceBackendPort(instance: PortalInstance): number {
+  return instance.backendPort ?? instance.opencodePort;
+}
+
+function getInstanceBackendPid(instance: PortalInstance): number | null {
+  return instance.backendPid ?? instance.opencodePid ?? null;
+}
+
 function isInstanceRunning(instance: PortalInstance): boolean {
+  if (getInstanceProvider(instance) === "claude") {
+    return (
+      isProcessRunning(getInstanceBackendPid(instance)) ||
+      isProcessRunning(instance.webPid)
+    );
+  }
+
   return (
-    isProcessRunning(instance.opencodePid) || isProcessRunning(instance.webPid)
+    isProcessRunning(getInstanceBackendPid(instance)) ||
+    isProcessRunning(instance.webPid)
   );
+}
+
+function providerName(provider: Provider): string {
+  if (provider === "codex") return "Codex";
+  if (provider === "claude") return "Claude";
+  return "OpenCode";
+}
+
+function backendName(provider: Provider): string {
+  if (provider === "codex") return "Codex app-server";
+  if (provider === "claude") return "Claude SDK";
+  return "OpenCode API";
+}
+
+function backendLocation(provider: Provider, host: string, port: number): string {
+  if (provider === "claude") {
+    return `Claude SDK managed by Web UI (instance key: ${port})`;
+  }
+  const displayHost = host === "0.0.0.0" ? "localhost" : host;
+  return `http://${displayHost}:${port}`;
 }
 
 function printHelp() {
   console.log(`
-OpenPortal CLI - Run OpenCode with a web UI
+OpenPortal CLI - Run coding agents with a web UI
 
 Usage: openportal [command] [options]
 
 Commands:
-  (default)       Start OpenCode server and Web UI
-  run [options]   Start only OpenCode server (no Web UI)
+  (default)       Start provider backend and Web UI
+  run [provider]  Start only a provider backend (opencode, codex, or claude)
   stop            Stop running instances
   list, ls        List running instances
   clean           Clean up stale entries
@@ -168,15 +222,27 @@ Options:
   -h, --help              Show this help message
   -d, --directory <path>  Working directory (default: current directory)
   -p, --port <port>       Web UI port (default: 3000)
+  --provider <provider>   Backend provider: opencode, codex, or claude (default: opencode)
+  --backend-port <port>   Backend server port for the selected provider
   --opencode-port <port>  OpenCode server port (default: 4000)
+  --codex-port <port>     Codex app-server port (default: 4500)
+  --claude-port <port>    Claude instance key (default: 4600)
+  --claude-binary <path>  Claude binary path (default: claude)
+  --claude-home <path>    Custom HOME for Claude
+  --claude-args <args>    Extra Claude launch args
   --hostname <host>       Hostname to bind (default: 0.0.0.0)
   --name <name>           Instance name
 
 Examples:
   openportal                               Start OpenCode + Web UI
+  openportal --provider codex              Start Codex + Web UI
+  openportal --provider claude             Start Claude + Web UI
   openportal .                             Start OpenCode + Web UI in current dir
   openportal run                           Start only OpenCode server
-  openportal run -d ./my-project           Start OpenCode in specific directory
+  openportal run opencode                  Start only OpenCode server
+  openportal run codex                     Start only Codex app-server
+  openportal run claude                    Keep Claude SDK backend registered
+  openportal run codex -d ./my-project     Start Codex in specific directory
   openportal --port 8080                   Use custom web UI port
   openportal stop                          Stop running instances
   openportal list                          List running instances
@@ -222,6 +288,65 @@ function parseArgs(): {
   return { args, flags };
 }
 
+function parseProvider(value: unknown): Provider | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.toLowerCase();
+  if (
+    normalized === "opencode" ||
+    normalized === "codex" ||
+    normalized === "claude"
+  ) {
+    return normalized;
+  }
+  return null;
+}
+
+function getProviderOption(
+  options: Record<string, string | boolean | undefined>,
+): Provider {
+  return parseProvider(options.provider) ?? "opencode";
+}
+
+async function getBackendPort(
+  provider: Provider,
+  options: Record<string, string | boolean | undefined>,
+  hostname: string,
+): Promise<number> {
+  const explicit =
+    options["backend-port"] ??
+    (provider === "codex"
+      ? options["codex-port"]
+      : provider === "claude"
+        ? options["claude-port"]
+        : options["opencode-port"]);
+
+  if (explicit) {
+    return parseInt(explicit as string, 10);
+  }
+
+  if (provider === "claude") {
+    const used = new Set(
+      readConfig().instances
+        .filter(
+          (instance) =>
+            getInstanceProvider(instance) === "claude" &&
+            isInstanceRunning(instance),
+        )
+        .map((instance) => getInstanceBackendPort(instance)),
+    );
+    let port = DEFAULT_CLAUDE_PORT;
+    while (used.has(port) && port < 65535) {
+      port += 1;
+    }
+    return port;
+  }
+
+  return getPort({
+    host: hostname,
+    port: provider === "codex" ? DEFAULT_CODEX_PORT : DEFAULT_OPENCODE_PORT,
+  });
+}
+
 async function startOpenCodeServer(
   directory: string,
   opencodePort: number,
@@ -246,6 +371,45 @@ async function startOpenCodeServer(
   return proc.pid;
 }
 
+async function startCodexServer(
+  directory: string,
+  codexPort: number,
+): Promise<number> {
+  console.log(`Starting Codex app-server...`);
+  const proc = Bun.spawn(
+    [
+      "codex",
+      "app-server",
+      "--listen",
+      `ws://${DEFAULT_CODEX_HOSTNAME}:${codexPort}`,
+    ],
+    {
+      cwd: directory,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env },
+    },
+  );
+  return proc.pid;
+}
+
+async function startBackendServer(
+  provider: Provider,
+  directory: string,
+  backendPort: number,
+  hostname: string,
+): Promise<number | null> {
+  if (provider === "codex") {
+    return startCodexServer(directory, backendPort);
+  }
+
+  if (provider === "claude") {
+    console.log(`Claude SDK will be managed by the Web UI.`);
+    return null;
+  }
+
+  return startOpenCodeServer(directory, backendPort, hostname);
+}
+
 async function startWebServer(port: number, hostname: string): Promise<number> {
   console.log(`Starting Web UI server...`);
   const proc = Bun.spawn(["bun", "run", WEB_SERVER_PATH], {
@@ -262,36 +426,75 @@ async function startWebServer(port: number, hostname: string): Promise<number> {
   return proc.pid;
 }
 
+async function waitForClaudeRegistration(instance: PortalInstance) {
+  console.log("\nClaude SDK registration is active.");
+  console.log("Keep this command running while you use this Claude instance.");
+  console.log("Press Ctrl-C to stop it.");
+
+  await new Promise<void>((resolve) => {
+    const interval = setInterval(() => {}, 60 * 60 * 1000);
+    let settled = false;
+
+    const stop = () => {
+      if (settled) return;
+      settled = true;
+      clearInterval(interval);
+      resolve();
+    };
+
+    process.once("SIGINT", stop);
+    process.once("SIGTERM", stop);
+  });
+
+  mutateConfig((config) => {
+    config.instances = config.instances.filter((i) => i.id !== instance.id);
+  });
+
+  console.log(`\nStopped Claude SDK backend: ${instance.name}`);
+}
+
 async function cmdDefault(
   options: Record<string, string | boolean | undefined>,
 ) {
+  const provider = getProviderOption(options);
   const hostname = (options.hostname as string) || DEFAULT_HOSTNAME;
   const directory = resolve(
     (options.directory as string) || (options.d as string) || process.cwd(),
   );
   const name =
-    (options.name as string) || directory.split("/").pop() || "opencode";
+    (options.name as string) || directory.split("/").pop() || provider;
   const port =
     options.port || options.p
       ? parseInt((options.port as string) || (options.p as string), 10)
       : await getPort({ host: hostname, port: DEFAULT_PORT });
-  const opencodePort = options["opencode-port"]
-    ? parseInt(options["opencode-port"] as string, 10)
-    : await getPort({ host: hostname, port: DEFAULT_OPENCODE_PORT });
+  const backendHost = provider === "codex" ? DEFAULT_CODEX_HOSTNAME : hostname;
+  const backendPort = await getBackendPort(provider, options, backendHost);
 
-  const existing = readConfig().instances.find((i) => i.directory === directory);
-  if (existing && isInstanceRunning(existing)) {
+  const existing = readConfig().instances.find(
+    (i) => i.directory === directory && getInstanceProvider(i) === provider,
+  );
+  const existingIsActive =
+    existing &&
+    (provider === "claude"
+      ? isProcessRunning(existing.webPid)
+      : isInstanceRunning(existing));
+  if (existing && existingIsActive) {
+    const existingProvider = getInstanceProvider(existing);
+    const existingBackendPort = getInstanceBackendPort(existing);
     console.log(`OpenPortal is already running for this directory.`);
     console.log(`  Name: ${existing.name}`);
+    console.log(`  Provider: ${existingProvider}`);
     console.log(`  Web UI Port: ${existing.port ?? "N/A"}`);
-    console.log(`  OpenCode Port: ${existing.opencodePort}`);
+    console.log(
+      `  ${existingProvider === "claude" ? "Instance Key" : "Backend Port"}: ${existingBackendPort}`,
+    );
     if (existing.port) {
       console.log(
         `\n📱 Access OpenPortal at http://${hostname === "0.0.0.0" ? "localhost" : hostname}:${existing.port}`,
       );
     }
     console.log(
-      `🔧 OpenCode API at http://${hostname === "0.0.0.0" ? "localhost" : hostname}:${existing.opencodePort}`,
+      `🔧 ${backendName(existingProvider)} at ${backendLocation(existingProvider, backendHost, existingBackendPort)}`,
     );
     return;
   }
@@ -304,15 +507,19 @@ async function cmdDefault(
 
   console.log(`Starting OpenPortal...`);
   console.log(`  Name: ${name}`);
+  console.log(`  Provider: ${provider}`);
   console.log(`  Directory: ${directory}`);
   console.log(`  Web UI Port: ${port}`);
-  console.log(`  OpenCode Port: ${opencodePort}`);
+  console.log(
+    `  ${provider === "claude" ? "Instance Key" : "Backend Port"}: ${backendPort}`,
+  );
   console.log(`  Hostname: ${hostname}`);
 
   try {
-    const opencodePid = await startOpenCodeServer(
+    const backendPid = await startBackendServer(
+      provider,
       directory,
-      opencodePort,
+      backendPort,
       hostname,
     );
     const webPid = await startWebServer(port, hostname);
@@ -322,27 +529,43 @@ async function cmdDefault(
       name,
       directory,
       port,
-      opencodePort,
-      hostname,
-      opencodePid,
+      provider,
+      backendPort,
+      backendPid,
+      opencodePort: backendPort,
+      hostname: backendHost,
+      opencodePid: provider === "opencode" ? backendPid : null,
       webPid,
       startedAt: new Date().toISOString(),
+      ...(provider === "claude"
+        ? {
+            claudeBinaryPath: options["claude-binary"] as string | undefined,
+            claudeHomePath: options["claude-home"] as string | undefined,
+            claudeLaunchArgs: (options["claude-launch-args"] ??
+              options["claude-args"]) as string | undefined,
+          }
+        : {}),
     };
 
     mutateConfig((config) => {
       config.instances = config.instances.filter(
-        (i) => i.directory !== directory,
+        (i) => i.directory !== directory || getInstanceProvider(i) !== provider,
       );
       config.instances.push(instance);
     });
 
     const displayHost = hostname === "0.0.0.0" ? "localhost" : hostname;
-
     console.log(`\n✅ OpenPortal started!`);
-    console.log(`   OpenCode PID: ${opencodePid}`);
+    if (backendPid) {
+      console.log(`   ${providerName(provider)} PID: ${backendPid}`);
+    } else {
+      console.log(`   ${backendName(provider)}: managed by Web UI`);
+    }
     console.log(`   Web UI PID: ${webPid}`);
     console.log(`\n📱 Access OpenPortal at http://${displayHost}:${port}`);
-    console.log(`🔧 OpenCode API at http://${displayHost}:${opencodePort}`);
+    console.log(
+      `🔧 ${backendName(provider)} at ${backendLocation(provider, backendHost, backendPort)}`,
+    );
   } catch (error) {
     if (error instanceof Error) {
       console.error(`\n❌ Failed to start OpenPortal: ${error.message}`);
@@ -351,38 +574,94 @@ async function cmdDefault(
   }
 }
 
-async function cmdRun(options: Record<string, string | boolean | undefined>) {
+async function cmdRun(
+  options: Record<string, string | boolean | undefined>,
+  provider = getProviderOption(options),
+) {
   const hostname = (options.hostname as string) || DEFAULT_HOSTNAME;
   const directory = resolve(
     (options.directory as string) || (options.d as string) || process.cwd(),
   );
   const name =
-    (options.name as string) || directory.split("/").pop() || "opencode";
-  const opencodePort = options["opencode-port"]
-    ? parseInt(options["opencode-port"] as string, 10)
-    : await getPort({ host: hostname, port: DEFAULT_OPENCODE_PORT });
+    (options.name as string) || directory.split("/").pop() || provider;
+  const backendHost = provider === "codex" ? DEFAULT_CODEX_HOSTNAME : hostname;
+  const backendPort = await getBackendPort(provider, options, backendHost);
 
-  const existing = readConfig().instances.find((i) => i.directory === directory);
+  const existing = readConfig().instances.find(
+    (i) => i.directory === directory && getInstanceProvider(i) === provider,
+  );
   if (existing && isInstanceRunning(existing)) {
-    console.log(`OpenCode is already running for this directory.`);
-    console.log(`  Name: ${existing.name}`);
-    console.log(`  OpenCode Port: ${existing.opencodePort}`);
+    const existingBackendPort = getInstanceBackendPort(existing);
     console.log(
-      `🔧 OpenCode API at http://${hostname === "0.0.0.0" ? "localhost" : hostname}:${existing.opencodePort}`,
+      `${providerName(provider)} is already running for this directory.`,
+    );
+    console.log(`  Name: ${existing.name}`);
+    console.log(`  Provider: ${getInstanceProvider(existing)}`);
+    console.log(
+      `  ${provider === "claude" ? "Instance Key" : "Backend Port"}: ${existingBackendPort}`,
+    );
+    console.log(
+      `🔧 ${backendName(provider)} at ${backendLocation(provider, backendHost, existingBackendPort)}`,
     );
     return;
   }
 
-  console.log(`Starting OpenCode server...`);
+  console.log(
+    provider === "claude"
+      ? "Registering Claude SDK backend..."
+      : `Starting ${backendName(provider)}...`,
+  );
   console.log(`  Name: ${name}`);
+  console.log(`  Provider: ${provider}`);
   console.log(`  Directory: ${directory}`);
-  console.log(`  OpenCode Port: ${opencodePort}`);
-  console.log(`  Hostname: ${hostname}`);
+  console.log(
+    `  ${provider === "claude" ? "Instance Key" : "Backend Port"}: ${backendPort}`,
+  );
+  console.log(`  Hostname: ${backendHost}`);
 
   try {
-    const opencodePid = await startOpenCodeServer(
+    if (provider === "claude") {
+      const instance: PortalInstance = {
+        id: generateId(),
+        name,
+        directory,
+        port: null,
+        provider,
+        backendPort,
+        backendPid: process.pid,
+        opencodePort: backendPort,
+        hostname: backendHost,
+        opencodePid: null,
+        webPid: null,
+        startedAt: new Date().toISOString(),
+        claudeBinaryPath: options["claude-binary"] as string | undefined,
+        claudeHomePath: options["claude-home"] as string | undefined,
+        claudeLaunchArgs: (options["claude-launch-args"] ??
+          options["claude-args"]) as string | undefined,
+      };
+
+      mutateConfig((config) => {
+        config.instances = config.instances.filter(
+          (i) =>
+            i.directory !== directory || getInstanceProvider(i) !== provider,
+        );
+        config.instances.push(instance);
+      });
+
+      console.log("\n✅ Claude SDK backend registered!");
+      console.log(`   Claude holder PID: ${process.pid}`);
+      console.log(
+        `🔧 ${backendName(provider)} at ${backendLocation(provider, backendHost, backendPort)}`,
+      );
+
+      await waitForClaudeRegistration(instance);
+      return;
+    }
+
+    const backendPid = await startBackendServer(
+      provider,
       directory,
-      opencodePort,
+      backendPort,
       hostname,
     );
 
@@ -391,28 +670,35 @@ async function cmdRun(options: Record<string, string | boolean | undefined>) {
       name,
       directory,
       port: null,
-      opencodePort,
-      hostname,
-      opencodePid,
+      provider,
+      backendPort,
+      backendPid,
+      opencodePort: backendPort,
+      hostname: backendHost,
+      opencodePid: provider === "opencode" ? backendPid : null,
       webPid: null,
       startedAt: new Date().toISOString(),
     };
 
     mutateConfig((config) => {
       config.instances = config.instances.filter(
-        (i) => i.directory !== directory,
+        (i) => i.directory !== directory || getInstanceProvider(i) !== provider,
       );
       config.instances.push(instance);
     });
 
-    const displayHost = hostname === "0.0.0.0" ? "localhost" : hostname;
-
-    console.log(`\n✅ OpenCode server started!`);
-    console.log(`   OpenCode PID: ${opencodePid}`);
-    console.log(`🔧 OpenCode API at http://${displayHost}:${opencodePort}`);
+    console.log(`\n✅ ${backendName(provider)} started!`);
+    if (backendPid) {
+      console.log(`   ${providerName(provider)} PID: ${backendPid}`);
+    }
+    console.log(
+      `🔧 ${backendName(provider)} at ${backendLocation(provider, backendHost, backendPort)}`,
+    );
   } catch (error) {
     if (error instanceof Error) {
-      console.error(`\n❌ Failed to start OpenCode: ${error.message}`);
+      console.error(
+        `\n❌ Failed to start ${providerName(provider)}: ${error.message}`,
+      );
     }
     process.exit(1);
   }
@@ -438,12 +724,15 @@ async function cmdStop(options: Record<string, string | boolean | undefined>) {
     process.exit(1);
   }
 
-  if (removed.opencodePid !== null) {
+  const provider = getInstanceProvider(removed);
+  const backendPid = getInstanceBackendPid(removed);
+
+  if (backendPid !== null) {
     try {
-      process.kill(removed.opencodePid, "SIGTERM");
-      console.log(`Stopped OpenCode (PID: ${removed.opencodePid})`);
+      process.kill(backendPid, "SIGTERM");
+      console.log(`Stopped ${providerName(provider)} (PID: ${backendPid})`);
     } catch {
-      console.log("OpenCode was already stopped.");
+      console.log(`${providerName(provider)} was already stopped.`);
     }
   }
 
@@ -468,27 +757,31 @@ async function cmdList() {
   }
 
   console.log("\nOpenPortal Instances:\n");
-  console.log("ID\t\tNAME\t\t\tPORT\tOPENCODE\tSTATUS\t\tDIRECTORY");
+  console.log("ID\t\tNAME\t\t\tPROVIDER\tPORT\tBACKEND\tSTATUS\t\tDIRECTORY");
   console.log("-".repeat(110));
 
   const liveIds = new Set<string>();
 
   for (const instance of config.instances) {
-    const opencodeRunning = isProcessRunning(instance.opencodePid);
+    const provider = getInstanceProvider(instance);
+    const backendRunning = isProcessRunning(getInstanceBackendPid(instance));
     const webRunning = isProcessRunning(instance.webPid);
 
     let status = "stopped";
-    if (opencodeRunning && webRunning) status = "running";
-    else if (opencodeRunning) status = "opencode";
+    if (provider === "claude") {
+      if (webRunning) status = "running";
+      else if (backendRunning) status = "registered";
+    } else if (backendRunning && webRunning) status = "running";
+    else if (backendRunning) status = provider;
     else if (webRunning) status = "web only";
 
-    if (opencodeRunning || webRunning) {
+    if (backendRunning || webRunning) {
       liveIds.add(instance.id);
     }
 
     const portDisplay = instance.port ?? "-";
     console.log(
-      `${instance.id}\t${instance.name.padEnd(16)}\t${String(portDisplay).padEnd(4)}\t${instance.opencodePort}\t\t${status.padEnd(12)}\t${instance.directory}`,
+      `${instance.id}\t${instance.name.padEnd(16)}\t${provider.padEnd(8)}\t${String(portDisplay).padEnd(4)}\t${getInstanceBackendPort(instance)}\t\t${status.padEnd(12)}\t${instance.directory}`,
     );
   }
 
@@ -531,24 +824,35 @@ async function main() {
   }
 
   const command = args[0]?.toLowerCase();
+  const commandProvider = parseProvider(command);
 
   if (
     !command ||
     command === "." ||
     command.startsWith("/") ||
-    command.startsWith("./")
+    command.startsWith("./") ||
+    commandProvider
   ) {
     if (command && command !== ".") {
-      flags.directory = command;
+      if (commandProvider) {
+        flags.provider = commandProvider;
+      } else {
+        flags.directory = command;
+      }
     }
     await cmdDefault(flags);
     return;
   }
 
   switch (command) {
-    case "run":
-      await cmdRun(flags);
+    case "run": {
+      const provider = parseProvider(args[1]) ?? getProviderOption(flags);
+      if (args[1] && !parseProvider(args[1])) {
+        flags.directory = args[1];
+      }
+      await cmdRun(flags, provider);
       break;
+    }
     case "stop":
       await cmdStop(flags);
       break;
