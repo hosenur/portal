@@ -5,8 +5,6 @@ import {
   useEffect,
   type ReactNode,
 } from "react";
-import { useAccentStore, type AccentColor } from "@/stores/accent-store";
-import { useFontStore, type FontFamily } from "@/stores/font-store";
 
 type Theme = "light" | "dark" | "system";
 
@@ -14,10 +12,6 @@ interface ThemeContextType {
   theme: Theme;
   setTheme: (theme: Theme) => void;
   resolvedTheme: "light" | "dark";
-  accentColor: AccentColor;
-  setAccentColor: (color: AccentColor) => void;
-  fontFamily: FontFamily;
-  setFontFamily: (font: FontFamily) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -44,14 +38,6 @@ function applyTheme(theme: Theme) {
   return resolved;
 }
 
-function applyAccentColor(accentColor: AccentColor) {
-  document.documentElement.setAttribute("data-accent", accentColor);
-}
-
-function applyFontFamily(fontFamily: FontFamily) {
-  document.documentElement.setAttribute("data-font", fontFamily);
-}
-
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
     if (typeof window === "undefined") return "system";
@@ -62,12 +48,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     if (typeof window === "undefined") return "light";
     return theme === "system" ? getSystemTheme() : theme;
   });
-
-  const accentColor = useAccentStore((state) => state.accentColor);
-  const setAccentColor = useAccentStore((state) => state.setAccentColor);
-
-  const fontFamily = useFontStore((state) => state.fontFamily);
-  const setFontFamily = useFontStore((state) => state.setFontFamily);
 
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);
@@ -80,14 +60,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const resolved = applyTheme(theme);
     setResolvedTheme(resolved);
   }, [theme]);
-
-  useEffect(() => {
-    applyAccentColor(accentColor);
-  }, [accentColor]);
-
-  useEffect(() => {
-    applyFontFamily(fontFamily);
-  }, [fontFamily]);
 
   useEffect(() => {
     if (theme !== "system") return;
@@ -108,10 +80,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         theme,
         setTheme,
         resolvedTheme,
-        accentColor,
-        setAccentColor,
-        fontFamily,
-        setFontFamily,
       }}
     >
       {children}

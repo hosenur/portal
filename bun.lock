@@ -39,7 +39,6 @@
       "dependencies": {
         "@anthropic-ai/claude-agent-sdk": "^0.2.111",
         "@fontsource-variable/geist-mono": "^5.2.7",
-        "@fontsource-variable/inter": "^5.2.8",
         "@fontsource/geist-sans": "^5.2.5",
         "@opencode-ai/sdk": "1.14.41",
         "@pierre/diffs": "^1.1.21",
@@ -79,7 +78,7 @@
     },
     "packages/cli": {
       "name": "openportal",
-      "version": "0.1.31",
+      "version": "0.1.32",
       "bin": {
         "openportal": "./dist/index.js",
       },
@@ -210,8 +209,6 @@
     "@floating-ui/utils": ["@floating-ui/utils@0.2.10", "", {}, "sha512-aGTxbpbg8/b5JfU1HXSrbH3wXZuLPJcNEcZQFMxLs3oSzgtVu6nFPkbbGGUvBcUjKV2YyB9Wxxabo+HEH9tcRQ=="],
 
     "@fontsource-variable/geist-mono": ["@fontsource-variable/geist-mono@5.2.7", "", {}, "sha512-ZKlZ5sjtalb2TwXKs400mAGDlt/+2ENLNySPx0wTz3bP3mWARCsUW+rpxzZc7e05d2qGch70pItt3K4qttbIYA=="],
-
-    "@fontsource-variable/inter": ["@fontsource-variable/inter@5.2.8", "", {}, "sha512-kOfP2D+ykbcX/P3IFnokOhVRNoTozo5/JxhAIVYLpea/UBmCQ/YWPBfWIDuBImXX/15KH+eKh4xpEUyS2sQQGQ=="],
 
     "@fontsource/geist-sans": ["@fontsource/geist-sans@5.2.5", "", {}, "sha512-anllOHyJbElRs9fV15TeDRqAeb1IKm4bSknPl6ZMoyPTx1BBy7logudcUwpNjmQLkzn4Q0JGQLRCUKJYoyST6A=="],
 

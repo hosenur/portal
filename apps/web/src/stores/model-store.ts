@@ -4,6 +4,7 @@ import { persist } from "zustand/middleware";
 export interface SelectedModel {
   providerID: string;
   modelID: string;
+  variant?: string;
 }
 
 const DEFAULT_MODEL: SelectedModel = {
@@ -11,14 +12,36 @@ const DEFAULT_MODEL: SelectedModel = {
   modelID: "",
 };
 
-function parseModelKey(key: string): SelectedModel {
+function decodeModelKeyPart(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+export function parseModelKey(key: string): SelectedModel {
+  if (key.includes("|")) {
+    const [providerID = "", modelID = "", variant = ""] = key
+      .split("|")
+      .map(decodeModelKeyPart);
+
+    return {
+      providerID,
+      modelID,
+      ...(variant ? { variant } : {}),
+    };
+  }
+
   const [providerID = "", ...rest] = key.split("/");
   const modelID = rest.join("/");
   return { providerID, modelID };
 }
 
-function toModelKey(model: SelectedModel): string {
-  return `${model.providerID}/${model.modelID}`;
+export function toModelKey(model: SelectedModel): string {
+  return [model.providerID, model.modelID, model.variant ?? ""]
+    .map(encodeURIComponent)
+    .join("|");
 }
 
 interface ModelState {
@@ -44,7 +67,8 @@ export const useModelStore = create<ModelState>()(
         const current = get().selectedModel;
         const isDefault =
           current.providerID === DEFAULT_MODEL.providerID &&
-          current.modelID === DEFAULT_MODEL.modelID;
+          current.modelID === DEFAULT_MODEL.modelID &&
+          !current.variant;
 
         if (defaultKey && isDefault) {
           const model = parseModelKey(defaultKey);

@@ -7,6 +7,7 @@ import { promisify } from "util";
 import {
   query as claudeQuery,
   type CanUseTool,
+  type EffortLevel,
   type PermissionResult,
   type Query,
   type SDKAssistantMessage,
@@ -25,11 +26,39 @@ import type {
 const CONFIG_PATH = join(homedir(), ".portal.json");
 const COMMAND_TIMEOUT_MS = 2_500;
 const DEFAULT_MODEL_ID = "claude-sonnet-4-6";
-const CLAUDE_MODELS = [
-  { id: "claude-opus-4-7", name: "Claude Opus 4.7" },
-  { id: "claude-opus-4-6", name: "Claude Opus 4.6" },
+const CLAUDE_DEFAULT_EFFORT = "high";
+const CLAUDE_COMMON_EFFORTS = ["low", "medium", "high", "max"] as const;
+const CLAUDE_OPUS_47_EFFORTS = [
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+] as const;
+
+interface ClaudeModelDefinition {
+  id: string;
+  name: string;
+  efforts?: readonly EffortLevel[];
+}
+
+const CLAUDE_MODELS: ClaudeModelDefinition[] = [
+  {
+    id: "claude-opus-4-7",
+    name: "Claude Opus 4.7",
+    efforts: CLAUDE_OPUS_47_EFFORTS,
+  },
+  {
+    id: "claude-opus-4-6",
+    name: "Claude Opus 4.6",
+    efforts: CLAUDE_COMMON_EFFORTS,
+  },
   { id: "claude-opus-4-5", name: "Claude Opus 4.5" },
-  { id: DEFAULT_MODEL_ID, name: "Claude Sonnet 4.6" },
+  {
+    id: DEFAULT_MODEL_ID,
+    name: "Claude Sonnet 4.6",
+    efforts: CLAUDE_COMMON_EFFORTS,
+  },
   { id: "claude-haiku-4-5", name: "Claude Haiku 4.5" },
 ];
 
@@ -103,6 +132,7 @@ interface ClaudeSession {
   createdAt: number;
   updatedAt: number;
   modelID: string;
+  effort?: EffortLevel;
   status: SessionStatus;
   messages: SessionMessage[];
   query: Query | null;
@@ -117,6 +147,7 @@ interface PromptInput {
   model?: {
     providerID: string;
     modelID: string;
+    variant?: string;
   };
   agent?: string;
 }
@@ -248,6 +279,7 @@ function userMessage(id: string, text: string, created = Date.now()) {
 function assistantMessage(input: {
   id: string;
   modelID: string;
+  variant?: string;
   content?: SessionMessageAssistant["content"];
   created?: number;
   completed?: number;
@@ -262,7 +294,7 @@ function assistantMessage(input: {
     model: {
       id: input.modelID,
       providerID: "anthropic",
-      variant: "default",
+      variant: input.variant ?? "default",
     },
     content: input.content ?? [],
     time: {
@@ -283,22 +315,38 @@ function assistantMessage(input: {
   } satisfies SessionMessageAssistant;
 }
 
+function isClaudeEffort(value: string | undefined): value is EffortLevel {
+  return (
+    value === "low" ||
+    value === "medium" ||
+    value === "high" ||
+    value === "xhigh" ||
+    value === "max"
+  );
+}
+
+function effortVariants(efforts?: readonly EffortLevel[]) {
+  return Object.fromEntries(
+    (efforts ?? [])
+      .filter((effort) => effort !== CLAUDE_DEFAULT_EFFORT)
+      .map((effort) => [effort, { effort }]),
+  );
+}
+
 function sortMessages(messages: SessionMessage[]) {
   return messages
     .map((message, index) => ({ message, index }))
-    .sort(
-      (a, b) => {
-        const timeDiff = a.message.time.created - b.message.time.created;
-        if (timeDiff !== 0) return timeDiff;
-        if (a.message.type === "user" && b.message.type === "assistant") {
-          return -1;
-        }
-        if (a.message.type === "assistant" && b.message.type === "user") {
-          return 1;
-        }
-        return a.index - b.index;
-      },
-    )
+    .sort((a, b) => {
+      const timeDiff = a.message.time.created - b.message.time.created;
+      if (timeDiff !== 0) return timeDiff;
+      if (a.message.type === "user" && b.message.type === "assistant") {
+        return -1;
+      }
+      if (a.message.type === "assistant" && b.message.type === "user") {
+        return 1;
+      }
+      return a.index - b.index;
+    })
     .map((item) => item.message);
 }
 
@@ -442,7 +490,9 @@ function getMessageText(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : String(error || fallback);
 }
 
-function questionList(input: Record<string, unknown>): PendingQuestion["questions"] {
+function questionList(
+  input: Record<string, unknown>,
+): PendingQuestion["questions"] {
   const rawQuestions = Array.isArray(input.questions) ? input.questions : [];
 
   return rawQuestions.filter(isRecord).map((question, index) => ({
@@ -466,7 +516,7 @@ function questionAnswers(
   return Object.fromEntries(
     question.questions.map((item, index) => {
       const selected = answers[index] ?? [];
-      return [item.question, item.multiple ? selected : selected[0] ?? ""];
+      return [item.question, item.multiple ? selected : (selected[0] ?? "")];
     }),
   );
 }
@@ -598,7 +648,10 @@ class ClaudeAppClient {
 
   getStatuses() {
     return Object.fromEntries(
-      [...this.sessions.values()].map((session) => [session.id, session.status]),
+      [...this.sessions.values()].map((session) => [
+        session.id,
+        session.status,
+      ]),
     );
   }
 
@@ -671,7 +724,13 @@ class ClaudeAppClient {
       nextSessionTimestamp(session),
     );
 
-    session.modelID = input.model?.modelID || session.modelID || DEFAULT_MODEL_ID;
+    session.modelID =
+      input.model?.modelID || session.modelID || DEFAULT_MODEL_ID;
+    if (input.model) {
+      session.effort = isClaudeEffort(input.model.variant)
+        ? input.model.variant
+        : undefined;
+    }
     session.updatedAt = user.time.created;
     if (session.title === "New Claude session") {
       session.title = promptTitle(input.text) || session.title;
@@ -679,11 +738,15 @@ class ClaudeAppClient {
     }
 
     session.messages = upsertMessage(session.messages, user);
-    this.emit("session.next.prompted", {
-      sessionID: session.id,
-      timestamp: user.time.created,
-      prompt: { text: input.text, files: [], agents: [] },
-    }, user.id);
+    this.emit(
+      "session.next.prompted",
+      {
+        sessionID: session.id,
+        timestamp: user.time.created,
+        prompt: { text: input.text, files: [], agents: [] },
+      },
+      user.id,
+    );
     this.emit("message.updated", { sessionID: session.id });
 
     session.queue = session.queue
@@ -748,6 +811,7 @@ class ClaudeAppClient {
                 id: model.id,
                 name: model.name,
                 providerID: "anthropic",
+                variants: effortVariants(model.efforts),
               },
             ]),
           ),
@@ -760,7 +824,11 @@ class ClaudeAppClient {
   }
 
   async getGitDiff() {
-    const diff = await commandOutput("git", ["diff", "--no-ext-diff"], this.directory);
+    const diff = await commandOutput(
+      "git",
+      ["diff", "--no-ext-diff"],
+      this.directory,
+    );
     return {
       diff,
       worktree: this.directory,
@@ -799,6 +867,7 @@ class ClaudeAppClient {
       assistantMessage({
         id: assistantId,
         modelID: session.modelID,
+        variant: session.effort,
         created,
       }),
     );
@@ -818,6 +887,9 @@ class ClaudeAppClient {
         options: {
           cwd: this.directory,
           ...(input.model?.modelID ? { model: input.model.modelID } : {}),
+          ...(isClaudeEffort(input.model?.variant)
+            ? { effort: input.model.variant }
+            : {}),
           ...(input.agent ? { agent: input.agent } : {}),
           ...(session.claudeSessionId
             ? { resume: session.claudeSessionId }
@@ -881,7 +953,10 @@ class ClaudeAppClient {
     }
   }
 
-  private finishTurn(session: ClaudeSession, status: "completed" | "error" | "interrupted") {
+  private finishTurn(
+    session: ClaudeSession,
+    status: "completed" | "error" | "interrupted",
+  ) {
     const now = nextSessionTimestamp(session);
     session.status = { type: "idle" };
     session.updatedAt = now;
@@ -939,7 +1014,10 @@ class ClaudeAppClient {
       return;
     }
 
-    if (message.type === "system" && message.subtype === "local_command_output") {
+    if (
+      message.type === "system" &&
+      message.subtype === "local_command_output"
+    ) {
       this.replaceAssistant(session, assistantId, (assistant) => ({
         ...assistant,
         content: [
@@ -958,7 +1036,9 @@ class ClaudeAppClient {
   ) {
     this.replaceAssistant(session, assistantId, (assistant) => {
       const resultText =
-        result.subtype === "success" && result.result && assistant.content.length === 0
+        result.subtype === "success" &&
+        result.result &&
+        assistant.content.length === 0
           ? [{ type: "text" as const, text: result.result }]
           : assistant.content;
 
@@ -1100,7 +1180,9 @@ class ClaudeAppClient {
   ) {
     const index = [...session.messages]
       .reverse()
-      .findIndex((message) => message.type === "assistant" && !message.time.completed);
+      .findIndex(
+        (message) => message.type === "assistant" && !message.time.completed,
+      );
     if (index < 0) return;
 
     const forwardIndex = session.messages.length - 1 - index;

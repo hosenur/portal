@@ -1,6 +1,5 @@
 import * as React from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { AccentSelector } from "@/components/accent-selector";
 import { useTheme } from "@/providers/theme-provider";
 import { useBreadcrumb } from "@/contexts/breadcrumb-context";
 import { SwatchIcon, CpuChipIcon, KeyIcon } from "@/components/icons/lucide";
@@ -52,15 +51,7 @@ const models = [
   { id: "claude-3-opus", title: "Claude 3 Opus" },
 ];
 
-const fonts = [
-  { id: "inter", title: "Inter" },
-  { id: "geist-sans", title: "Geist Sans" },
-  { id: "geist-mono", title: "Geist Mono" },
-  { id: "system", title: "System Default" },
-];
-
 function SettingsPage() {
-  const { fontFamily, setFontFamily } = useTheme();
   const { setPageTitle } = useBreadcrumb();
   const [selectedModel, setSelectedModel] = React.useState<string | null>(
     "claude-3-5-sonnet",
@@ -109,48 +100,11 @@ function SettingsPage() {
 
             <div className="space-y-6">
               <div className="space-y-2">
-                <p className="text-sm font-medium">Accent Color</p>
-                <p className="text-xs text-muted-fg">
-                  Select a primary color for buttons and highlights.
-                </p>
-                <AccentSelector />
-              </div>
-
-              <div className="space-y-2">
                 <p className="text-sm font-medium">Theme Preference</p>
                 <p className="text-xs text-muted-fg">
                   Switch between light, dark, or system modes.
                 </p>
                 <ThemeSetting />
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Font Family</p>
-                <p className="text-xs text-muted-fg">
-                  Choose a typeface for the interface.
-                </p>
-                <Select
-                  value={fontFamily}
-                  onChange={(value) =>
-                    setFontFamily(
-                      value as "inter" | "geist-sans" | "geist-mono" | "system",
-                    )
-                  }
-                  placeholder="Select a font"
-                >
-                  <SelectTrigger className="max-w-sm" />
-                  <SelectContent>
-                    {fonts.map((item) => (
-                      <SelectItem
-                        key={item.id}
-                        id={item.id}
-                        textValue={item.title}
-                      >
-                        {item.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
             </div>
           </div>

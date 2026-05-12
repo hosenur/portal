@@ -50,6 +50,10 @@ import {
   useSessionStatuses,
   useSessions,
 } from "@/hooks/use-opencode";
+import {
+  getDefaultUserSelectableAgentName,
+  isValidUserSelectableAgent,
+} from "@/lib/agent-selection";
 import { getErrorMessage, getResponseErrorMessage } from "@/lib/error-message";
 import { backendBasePath, type BackendProvider } from "@/lib/backend-url";
 import type { Agent, Session, SessionMessage } from "@opencode-ai/sdk/v2";
@@ -69,12 +73,11 @@ interface PromptSendResponse {
 }
 
 function isValidSessionAgent(agents: Agent[], name?: string) {
-  if (!name) return false;
-  return agents.some((agent) => agent.name === name);
+  return isValidUserSelectableAgent(agents, name);
 }
 
 function getDefaultSessionAgentName(agents: Agent[]) {
-  return agents.find((agent) => agent.name === "plan")?.name ?? agents[0]?.name;
+  return getDefaultUserSelectableAgentName(agents);
 }
 
 const OPENCODE_ID_LENGTH = 26;
@@ -807,6 +810,7 @@ function SessionPage() {
   const instance = useInstanceStore((s) => s.instance);
   const port = instance?.port ?? 0;
   const provider = instance?.provider;
+  const supportsAgentSelection = provider === "opencode";
   const apiBase = port ? backendBasePath(provider, port) : "";
 
   const {
@@ -838,6 +842,7 @@ function SessionPage() {
   }, [currentSession?.title, setPageTitle]);
 
   useEffect(() => {
+    if (!supportsAgentSelection) return;
     if (!sessionId || agents.length === 0) return;
     if (isValidSessionAgent(agents, selectedAgent)) return;
 
@@ -845,7 +850,13 @@ function SessionPage() {
     if (fallback) {
       setSelectedAgent(sessionId, fallback);
     }
-  }, [agents, sessionId, selectedAgent, setSelectedAgent]);
+  }, [
+    agents,
+    sessionId,
+    selectedAgent,
+    setSelectedAgent,
+    supportsAgentSelection,
+  ]);
 
   const [sendError, setSendError] = useState<string | null>(null);
   const [input, setInput] = useState("");
@@ -994,12 +1005,19 @@ function SessionPage() {
       if (!sessionId || !port) return;
 
       try {
-        const defaultAgent =
-          currentSession?.agent ?? getDefaultSessionAgentName(agents);
-        const agentOverride =
-          selectedAgent && selectedAgent !== defaultAgent
-            ? selectedAgent
-            : undefined;
+        let agentOverride: string | undefined;
+        if (supportsAgentSelection) {
+          const defaultAgent = isValidSessionAgent(
+            agents,
+            currentSession?.agent,
+          )
+            ? currentSession?.agent
+            : getDefaultSessionAgentName(agents);
+          agentOverride =
+            selectedAgent && selectedAgent !== defaultAgent
+              ? selectedAgent
+              : undefined;
+        }
 
         const response = await fetch(`${apiBase}/session/${sessionId}/prompt`, {
           method: "POST",
@@ -1054,6 +1072,7 @@ function SessionPage() {
       currentSession?.agent,
       agents,
       selectedAgent,
+      supportsAgentSelection,
       selectedModel,
       mutateSessionStatuses,
       mutateSessions,
@@ -1214,76 +1233,87 @@ function SessionPage() {
               className="mb-3"
             />
           )}
-          <Textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => {
-              const value = e.target.value;
-              setInput(value);
-              if (fileMention.isOpen || value.includes("@")) {
-                const cursorPos = e.target.selectionStart ?? value.length;
-                fileMention.handleInputChange(value, cursorPos);
-              }
-            }}
-            onInput={(e) => {
-              const target = e.target as HTMLTextAreaElement;
-              const value = target.value;
-              if (value.includes("@")) {
-                const cursorPos = target.selectionStart ?? value.length;
-                fileMention.handleInputChange(value, cursorPos);
-              }
-            }}
-            onSelect={(e) => {
-              const target = e.target as HTMLTextAreaElement;
-              if (fileMention.isOpen || input.includes("@")) {
-                const cursorPos = target.selectionStart ?? input.length;
-                fileMention.handleInputChange(input, cursorPos);
-              }
-            }}
-            onKeyDown={(e) => {
-              const handled = fileMention.handleKeyDown(e, fileResults.length);
-              if (handled) {
-                if (
-                  (e.key === "Enter" || e.key === "Tab") &&
-                  fileResults.length > 0
-                ) {
-                  const selectedFile = fileResults[fileMention.selectedIndex];
-                  if (selectedFile) {
-                    const newValue = fileMention.handleSelect(
-                      selectedFile,
-                      input,
-                    );
-                    setInput(newValue);
+          <div className="relative">
+            <Textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => {
+                const value = e.target.value;
+                setInput(value);
+                if (fileMention.isOpen || value.includes("@")) {
+                  const cursorPos = e.target.selectionStart ?? value.length;
+                  fileMention.handleInputChange(value, cursorPos);
+                }
+              }}
+              onInput={(e) => {
+                const target = e.target as HTMLTextAreaElement;
+                const value = target.value;
+                if (value.includes("@")) {
+                  const cursorPos = target.selectionStart ?? value.length;
+                  fileMention.handleInputChange(value, cursorPos);
+                }
+              }}
+              onSelect={(e) => {
+                const target = e.target as HTMLTextAreaElement;
+                if (fileMention.isOpen || input.includes("@")) {
+                  const cursorPos = target.selectionStart ?? input.length;
+                  fileMention.handleInputChange(input, cursorPos);
+                }
+              }}
+              onKeyDown={(e) => {
+                const handled = fileMention.handleKeyDown(
+                  e,
+                  fileResults.length,
+                );
+                if (handled) {
+                  if (
+                    (e.key === "Enter" || e.key === "Tab") &&
+                    fileResults.length > 0
+                  ) {
+                    const selectedFile = fileResults[fileMention.selectedIndex];
+                    if (selectedFile) {
+                      const newValue = fileMention.handleSelect(
+                        selectedFile,
+                        input,
+                      );
+                      setInput(newValue);
+                    }
+                  }
+                  return;
+                }
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  if (input.trim() && !sending && !submitLockRef.current) {
+                    handleSubmit(e as unknown as React.FormEvent);
                   }
                 }
-                return;
-              }
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                if (input.trim() && !sending && !submitLockRef.current) {
-                  handleSubmit(e as unknown as React.FormEvent);
-                }
-              }
-            }}
-            placeholder="Type your message... (use @ to mention files)"
-            className="w-full resize-none min-h-32 max-h-32 overflow-y-auto"
-            rows={5}
-          />
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center justify-between gap-2 sm:justify-start">
-              <AgentSelect sessionId={sessionId} />
-            </div>
-            <div className="flex items-center justify-between gap-2 sm:justify-end">
-              <ModelSelect />
-              <Button
-                type="submit"
-                isDisabled={!input.trim() || sending}
-                className="min-w-32"
-              >
-                <SendIcon size="16px" />
-                {sending ? "Sending..." : "Send"}
-              </Button>
-            </div>
+              }}
+              placeholder="Type your message... (use @ to mention files)"
+              className="min-h-32 max-h-32 w-full resize-none overflow-y-auto pr-14 pb-12"
+              rows={5}
+            />
+            <Button
+              type="submit"
+              isDisabled={!input.trim() || sending}
+              isCircle
+              size="sq-sm"
+              aria-label={sending ? "Sending message" : "Send message"}
+              className="absolute right-3 bottom-3"
+            >
+              {sending ? (
+                <span className="grid size-4 place-items-center">
+                  <Loader className="size-4" aria-label="Sending message" />
+                </span>
+              ) : (
+                <span className="grid size-4 place-items-center">
+                  <SendIcon size="16px" />
+                </span>
+              )}
+            </Button>
+          </div>
+          <div className="mt-3 flex items-center justify-end gap-2">
+            {supportsAgentSelection && <AgentSelect sessionId={sessionId} />}
+            <ModelSelect />
           </div>
         </form>
       </div>

@@ -9,7 +9,6 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.111",
     "@fontsource-variable/geist-mono": "^5.2.7",
-    "@fontsource-variable/inter": "^5.2.8",
     "@fontsource/geist-sans": "^5.2.5",
     "@opencode-ai/sdk": "1.14.41",
     "@pierre/diffs": "^1.1.21",

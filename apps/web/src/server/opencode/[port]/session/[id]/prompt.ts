@@ -18,6 +18,7 @@ const promptBodySchema = z.object({
     .object({
       providerID: z.string(),
       modelID: z.string(),
+      variant: z.string().optional(),
     })
     .optional(),
   agent: z.string().optional(),
@@ -63,13 +64,21 @@ export default defineHandler(async (event) => {
 
   const client = getOpencodeClient(port);
   try {
-    await client.session.promptAsync({
+    const promptInput = {
       sessionID: id,
       messageID: body.messageID,
       parts: [{ type: "text" as const, text: body.text }],
-      model: body.model,
+      model: body.model
+        ? {
+            providerID: body.model.providerID,
+            modelID: body.model.modelID,
+          }
+        : undefined,
+      variant: body.model?.variant,
       agent: body.agent,
-    });
+    };
+
+    await client.session.promptAsync(promptInput);
   } catch (error) {
     if (requestKey) {
       recentPromptRequests.delete(requestKey);

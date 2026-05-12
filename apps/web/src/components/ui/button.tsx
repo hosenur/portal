@@ -1,18 +1,20 @@
-"use client"
+"use client";
 
 import {
   Button as ButtonPrimitive,
   type ButtonProps as ButtonPrimitiveProps,
-} from "react-aria-components"
-import { tv, type VariantProps } from "tailwind-variants"
-import { cx } from "@/lib/primitive"
+} from "react-aria-components";
+import { tv, type VariantProps } from "tailwind-variants";
+import { cx } from "@/lib/primitive";
 
 export const buttonStyles = tv({
   base: [
-    "[--btn-border:var(--color-fg)]/15 [--btn-icon-active:var(--btn-fg)] [--btn-outline:var(--btn-bg)] [--btn-radius:calc(var(--radius-lg)-1px)] [--btn-ring:var(--btn-bg)]/20",
-    "bg-(--btn-bg) text-(--btn-fg) outline-(--btn-outline) ring-(--btn-ring) hover:bg-(--btn-overlay)",
-    "relative isolate inline-flex items-center justify-center border border-(--btn-border) font-medium hover:no-underline",
-    "focus:outline-0 focus-visible:outline focus-visible:outline-offset-2 focus-visible:ring-2 focus-visible:ring-offset-3 focus-visible:ring-offset-bg",
+    "[--btn-radius:var(--radius-xl)] [--btn-icon-active:var(--btn-fg)] [--btn-outline:var(--btn-stroke-start)] [--btn-focus-ring:var(--btn-stroke-start)]",
+    "relative isolate inline-flex items-center justify-center rounded-(--btn-radius) border border-transparent font-medium text-(--btn-fg) outline-(--btn-outline) transition-[background,box-shadow,color,opacity] duration-150 hover:no-underline",
+    "[background:linear-gradient(180deg,var(--btn-fill-start)_0%,var(--btn-fill-end)_100%)_padding-box,linear-gradient(180deg,var(--btn-stroke-start)_0%,var(--btn-stroke-end)_100%)_border-box]",
+    "[box-shadow:0_2px_4px_rgb(0_0_0/0.1),0_0_0_1px_var(--btn-shadow-ring)]",
+    "enabled:hover:[--btn-fill-start:var(--btn-fill-hover-start)] enabled:hover:[--btn-fill-end:var(--btn-fill-hover-end)] pressed:[--btn-fill-start:var(--btn-fill-active-start)] pressed:[--btn-fill-end:var(--btn-fill-active-end)]",
+    "focus:outline-0 focus-visible:outline focus-visible:outline-offset-2 focus-visible:ring-2 focus-visible:ring-(--btn-focus-ring) focus-visible:ring-offset-3 focus-visible:ring-offset-bg",
     "*:data-[slot=icon]:-mx-0.5 *:data-[slot=icon]:shrink-0 *:data-[slot=icon]:self-center *:data-[slot=icon]:text-(--btn-icon) focus-visible:*:data-[slot=icon]:text-(--btn-icon-active)/80 hover:*:data-[slot=icon]:text-(--btn-icon-active)/90 forced-colors:[--btn-icon:ButtonText] forced-colors:hover:[--btn-icon:ButtonText]",
     "*:data-[slot=loader]:-mx-0.5 *:data-[slot=loader]:shrink-0 *:data-[slot=loader]:self-center *:data-[slot=loader]:text-(--btn-icon)",
     "pending:opacity-50 disabled:opacity-50 disabled:forced-colors:text-[GrayText]",
@@ -21,17 +23,17 @@ export const buttonStyles = tv({
   variants: {
     intent: {
       primary:
-        "[--btn-bg:var(--color-primary)] [--btn-fg:var(--color-primary-fg)] [--btn-icon-active:var(--primary-fg)]/80 [--btn-icon:var(--primary-fg)]/60 [--btn-overlay:color-mix(in_oklab,var(--color-primary-fg)_10%,var(--color-primary)_90%)]",
+        "[--btn-fill-start:#201E25] [--btn-fill-end:#323137] [--btn-fill-hover-start:#292730] [--btn-fill-hover-end:#3A3940] [--btn-fill-active-start:#1A181F] [--btn-fill-active-end:#2B2A30] [--btn-stroke-start:#4B4951] [--btn-stroke-end:#313036] [--btn-shadow-ring:#0D0D0D] [--btn-fg:#F4F4F5] [--btn-icon:#F4F4F5]/70 [--btn-icon-active:#F4F4F5]",
       secondary:
-        "[--btn-bg:var(--color-secondary)] [--btn-fg:var(--color-secondary-fg)] [--btn-icon:var(--color-muted-fg)] [--btn-outline:var(--color-secondary-fg)] [--btn-overlay:var(--color-muted-fg)]/25 [--btn-ring:var(--color-muted-fg)]/20",
+        "[--btn-fill-start:color-mix(in_oklab,var(--color-secondary)_96%,var(--color-bg)_4%)] [--btn-fill-end:color-mix(in_oklab,var(--color-secondary)_86%,var(--color-fg)_14%)] [--btn-fill-hover-start:color-mix(in_oklab,var(--color-secondary)_90%,var(--color-fg)_10%)] [--btn-fill-hover-end:color-mix(in_oklab,var(--color-secondary)_78%,var(--color-fg)_22%)] [--btn-fill-active-start:color-mix(in_oklab,var(--color-secondary)_78%,var(--color-fg)_22%)] [--btn-fill-active-end:color-mix(in_oklab,var(--color-secondary)_70%,var(--color-fg)_30%)] [--btn-stroke-start:color-mix(in_oklab,var(--color-secondary)_60%,var(--color-fg)_40%)] [--btn-stroke-end:color-mix(in_oklab,var(--color-secondary)_78%,var(--color-fg)_22%)] [--btn-shadow-ring:color-mix(in_oklab,var(--color-fg)_16%,transparent)] [--btn-fg:var(--color-secondary-fg)] [--btn-icon:var(--color-muted-fg)] [--btn-icon-active:var(--color-secondary-fg)]",
       warning:
-        "[--btn-bg:var(--color-warning)] [--btn-fg:var(--color-warning-fg)] [--btn-icon:var(--color-warning-fg)]/60 [--btn-overlay:var(--color-warning)]/85",
+        "[--btn-fill-start:color-mix(in_oklab,var(--color-warning)_92%,white_8%)] [--btn-fill-end:color-mix(in_oklab,var(--color-warning)_82%,black_18%)] [--btn-fill-hover-start:color-mix(in_oklab,var(--color-warning)_96%,white_4%)] [--btn-fill-hover-end:color-mix(in_oklab,var(--color-warning)_74%,black_26%)] [--btn-fill-active-start:color-mix(in_oklab,var(--color-warning)_84%,black_16%)] [--btn-fill-active-end:color-mix(in_oklab,var(--color-warning)_68%,black_32%)] [--btn-stroke-start:color-mix(in_oklab,var(--color-warning)_70%,white_30%)] [--btn-stroke-end:color-mix(in_oklab,var(--color-warning)_60%,black_40%)] [--btn-shadow-ring:color-mix(in_oklab,var(--color-warning)_45%,black_55%)] [--btn-fg:var(--color-warning-fg)] [--btn-icon:var(--color-warning-fg)]/70 [--btn-icon-active:var(--color-warning-fg)]",
       danger:
-        "[--btn-bg:var(--color-danger)] [--btn-fg:var(--color-danger-fg)] [--btn-icon:color-mix(in_oklab,var(--color-danger-fg)_60%,var(--danger)_40%)] [--btn-overlay:var(--color-danger)]/85",
+        "[--btn-fill-start:color-mix(in_oklab,var(--color-danger)_92%,white_8%)] [--btn-fill-end:color-mix(in_oklab,var(--color-danger)_78%,black_22%)] [--btn-fill-hover-start:color-mix(in_oklab,var(--color-danger)_96%,white_4%)] [--btn-fill-hover-end:color-mix(in_oklab,var(--color-danger)_70%,black_30%)] [--btn-fill-active-start:color-mix(in_oklab,var(--color-danger)_84%,black_16%)] [--btn-fill-active-end:color-mix(in_oklab,var(--color-danger)_64%,black_36%)] [--btn-stroke-start:color-mix(in_oklab,var(--color-danger)_70%,white_30%)] [--btn-stroke-end:color-mix(in_oklab,var(--color-danger)_58%,black_42%)] [--btn-shadow-ring:color-mix(in_oklab,var(--color-danger)_45%,black_55%)] [--btn-fg:var(--color-danger-fg)] [--btn-icon:var(--color-danger-fg)]/70 [--btn-icon-active:var(--color-danger-fg)]",
       outline:
-        "border-border [--btn-bg:transparent] [--btn-icon:var(--color-muted-fg)] [--btn-outline:var(--color-ring)] [--btn-overlay:var(--color-muted-fg)]/10 [--btn-ring:var(--color-ring)]/20",
+        "[--btn-fill-start:color-mix(in_oklab,var(--color-bg)_92%,var(--color-fg)_8%)] [--btn-fill-end:color-mix(in_oklab,var(--color-bg)_86%,var(--color-fg)_14%)] [--btn-fill-hover-start:color-mix(in_oklab,var(--color-bg)_88%,var(--color-fg)_12%)] [--btn-fill-hover-end:color-mix(in_oklab,var(--color-bg)_80%,var(--color-fg)_20%)] [--btn-fill-active-start:color-mix(in_oklab,var(--color-bg)_82%,var(--color-fg)_18%)] [--btn-fill-active-end:color-mix(in_oklab,var(--color-bg)_74%,var(--color-fg)_26%)] [--btn-stroke-start:color-mix(in_oklab,var(--color-border)_65%,var(--color-fg)_35%)] [--btn-stroke-end:var(--color-border)] [--btn-shadow-ring:color-mix(in_oklab,var(--color-fg)_10%,transparent)] [--btn-fg:var(--color-fg)] [--btn-icon:var(--color-muted-fg)] [--btn-icon-active:var(--color-fg)]",
       plain:
-        "border-transparent [--btn-bg:transparent] [--btn-icon:var(--color-muted-fg)] [--btn-outline:var(--color-ring)] [--btn-overlay:var(--color-muted-fg)]/10 [--btn-ring:var(--color-ring)]/20",
+        "[--btn-fill-start:color-mix(in_oklab,var(--color-bg)_94%,var(--color-fg)_6%)] [--btn-fill-end:color-mix(in_oklab,var(--color-bg)_90%,var(--color-fg)_10%)] [--btn-fill-hover-start:color-mix(in_oklab,var(--color-bg)_90%,var(--color-fg)_10%)] [--btn-fill-hover-end:color-mix(in_oklab,var(--color-bg)_84%,var(--color-fg)_16%)] [--btn-fill-active-start:color-mix(in_oklab,var(--color-bg)_84%,var(--color-fg)_16%)] [--btn-fill-active-end:color-mix(in_oklab,var(--color-bg)_78%,var(--color-fg)_22%)] [--btn-stroke-start:color-mix(in_oklab,var(--color-border)_55%,transparent)] [--btn-stroke-end:color-mix(in_oklab,var(--color-border)_80%,transparent)] [--btn-shadow-ring:transparent] [--btn-fg:var(--color-fg)] [--btn-icon:var(--color-muted-fg)] [--btn-icon-active:var(--color-fg)]",
     },
     size: {
       xs: [
@@ -78,7 +80,7 @@ export const buttonStyles = tv({
 
     isCircle: {
       true: "rounded-full",
-      false: "rounded-lg",
+      false: "rounded-(--btn-radius)",
     },
   },
   defaultVariants: {
@@ -86,13 +88,21 @@ export const buttonStyles = tv({
     size: "md",
     isCircle: false,
   },
-})
+});
 
-export interface ButtonProps extends ButtonPrimitiveProps, VariantProps<typeof buttonStyles> {
-  ref?: React.Ref<HTMLButtonElement>
+export interface ButtonProps
+  extends ButtonPrimitiveProps, VariantProps<typeof buttonStyles> {
+  ref?: React.Ref<HTMLButtonElement>;
 }
 
-export function Button({ className, intent, size, isCircle, ref, ...props }: ButtonProps) {
+export function Button({
+  className,
+  intent,
+  size,
+  isCircle,
+  ref,
+  ...props
+}: ButtonProps) {
   return (
     <ButtonPrimitive
       ref={ref}
@@ -106,5 +116,5 @@ export function Button({ className, intent, size, isCircle, ref, ...props }: But
         className,
       )}
     />
-  )
+  );
 }

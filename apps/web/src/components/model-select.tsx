@@ -9,19 +9,21 @@ import {
   SelectTrigger,
 } from "@/components/ui/select";
 import { SearchField, SearchInput } from "@/components/ui/search-field";
-import { useModelStore } from "@/stores/model-store";
+import { toModelKey, useModelStore } from "@/stores/model-store";
 import { useProviders } from "@/hooks/use-opencode";
 
 interface ModelItem {
   id: string;
   name: string;
   providerName: string;
+  variant?: string;
 }
 
 interface ModelData {
   id: string;
   name: string;
   providerID: string;
+  variants?: Record<string, unknown>;
 }
 
 interface Provider {
@@ -41,6 +43,46 @@ interface ModelsData {
   defaultModel: string | null;
 }
 
+function formatVariantName(variant: string) {
+  const normalized = variant.trim();
+  const thinkingLabels: Record<string, string> = {
+    none: "Thinking none",
+    minimal: "Thinking minimal",
+    low: "Thinking low",
+    medium: "Thinking medium",
+    high: "Thinking high",
+    xhigh: "Thinking x-high",
+    max: "Thinking max",
+  };
+
+  return (
+    thinkingLabels[normalized.toLowerCase()] ??
+    normalized
+      .replace(/[-_]+/g, " ")
+      .replace(/\b\w/g, (char) => char.toUpperCase())
+  );
+}
+
+function modelItems(provider: Provider, model: ModelData): ModelItem[] {
+  const base = {
+    id: toModelKey({ providerID: provider.id, modelID: model.id }),
+    name: model.name,
+    providerName: provider.name,
+  };
+  const variants = Object.keys(model.variants ?? {}).map((variant) => ({
+    id: toModelKey({
+      providerID: provider.id,
+      modelID: model.id,
+      variant,
+    }),
+    name: `${model.name} (${formatVariantName(variant)})`,
+    providerName: provider.name,
+    variant,
+  }));
+
+  return [base, ...variants];
+}
+
 function transformProviders(data: {
   providers?: Provider[];
   default?: Record<string, string>;
@@ -51,7 +93,7 @@ function transformProviders(data: {
   let defaultModel: string | null = null;
   for (const [providerId, modelId] of Object.entries(defaults)) {
     if (modelId) {
-      defaultModel = `${providerId}/${modelId}`;
+      defaultModel = toModelKey({ providerID: providerId, modelID: modelId });
       break;
     }
   }
@@ -60,11 +102,9 @@ function transformProviders(data: {
     providers: providers.map((provider) => ({
       id: provider.id,
       name: provider.name,
-      models: Object.values(provider.models || {}).map((model) => ({
-        id: `${provider.id}/${model.id}`,
-        name: model.name,
-        providerName: provider.name,
-      })),
+      models: Object.values(provider.models || {}).flatMap((model) =>
+        modelItems(provider, model),
+      ),
     })),
     defaultModel,
   };
@@ -106,7 +146,11 @@ export function ModelSelect() {
       }))
       .filter((provider) => provider.models.length > 0);
   }, [providers, search]);
-  const selectedModelKey = `${selectedModel.providerID}/${selectedModel.modelID}`;
+  const selectedModelKey = toModelKey(selectedModel);
+  const selectedBaseModelKey = toModelKey({
+    providerID: selectedModel.providerID,
+    modelID: selectedModel.modelID,
+  });
   const modelKeys = useMemo(
     () =>
       new Set(
@@ -122,13 +166,19 @@ export function ModelSelect() {
       : getFirstModelKey(providers);
   const displayModelKey = modelKeys.has(selectedModelKey)
     ? selectedModelKey
-    : fallbackModel;
+    : modelKeys.has(selectedBaseModelKey)
+      ? selectedBaseModelKey
+      : fallbackModel;
 
   useEffect(() => {
     if (!fallbackModel) return;
 
     if (!modelKeys.has(selectedModelKey)) {
-      setModelFromKey(fallbackModel);
+      setModelFromKey(
+        modelKeys.has(selectedBaseModelKey)
+          ? selectedBaseModelKey
+          : fallbackModel,
+      );
       return;
     }
 
@@ -136,6 +186,7 @@ export function ModelSelect() {
   }, [
     fallbackModel,
     modelKeys,
+    selectedBaseModelKey,
     selectedModelKey,
     setModelFromDefault,
     setModelFromKey,
@@ -181,7 +232,11 @@ export function ModelSelect() {
                 <SelectLabel className="min-w-0 truncate">
                   {model.name}
                 </SelectLabel>
-                <SelectDescription>{model.providerName}</SelectDescription>
+                <SelectDescription>
+                  {model.variant
+                    ? `${model.providerName} - ${formatVariantName(model.variant)}`
+                    : model.providerName}
+                </SelectDescription>
               </SelectItem>
             )}
           </SelectSection>

@@ -7,10 +7,29 @@ interface CodexModel {
   displayName?: string;
   model?: string;
   isDefault?: boolean;
+  defaultReasoningEffort?: string;
+  supportedReasoningEfforts?: Array<{
+    reasoningEffort?: string;
+    description?: string;
+  }>;
 }
 
 interface ModelListResponse {
   data?: CodexModel[];
+}
+
+function reasoningVariants(model: CodexModel) {
+  const defaultEffort = model.defaultReasoningEffort;
+
+  return Object.fromEntries(
+    (model.supportedReasoningEfforts ?? [])
+      .map((option) => option.reasoningEffort)
+      .filter(
+        (effort): effort is string =>
+          !!effort && (!defaultEffort || effort !== defaultEffort),
+      )
+      .map((effort) => [effort, { effort }]),
+  );
 }
 
 export default defineHandler(async (event) => {
@@ -36,6 +55,7 @@ export default defineHandler(async (event) => {
               id: model.id,
               name: model.displayName || model.model || model.id,
               providerID: "openai",
+              variants: reasoningVariants(model),
             },
           ]),
         ),

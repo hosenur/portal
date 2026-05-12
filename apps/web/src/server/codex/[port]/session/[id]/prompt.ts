@@ -21,6 +21,7 @@ const promptBodySchema = z.object({
     .object({
       providerID: z.string(),
       modelID: z.string(),
+      variant: z.string().optional(),
     })
     .optional(),
   agent: z.string().optional(),
@@ -66,6 +67,7 @@ export default defineHandler(async (event) => {
 
   const client = getCodexClient(port);
   try {
+    const effort = body.model?.variant;
     const resumeParams: Record<string, unknown> = {
       threadId: id,
       ...(body.model?.modelID
@@ -82,6 +84,7 @@ export default defineHandler(async (event) => {
       threadId: id,
       input: [{ type: "text", text: body.text, text_elements: [] }],
       ...(body.model?.modelID ? { model: body.model.modelID } : {}),
+      ...(effort ? { effort } : {}),
     };
 
     try {

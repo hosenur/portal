@@ -18,6 +18,7 @@ const promptBodySchema = z.object({
     .object({
       providerID: z.string(),
       modelID: z.string(),
+      variant: z.string().optional(),
     })
     .optional(),
   agent: z.string().optional(),
