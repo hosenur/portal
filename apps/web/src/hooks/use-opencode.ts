@@ -249,3 +249,43 @@ export function useAbortSession() {
     return res.json();
   };
 }
+
+export function useForkSession() {
+  const backend = useBackend();
+
+  return async (sessionId: string, messageID?: string) => {
+    if (!backend) throw new Error("No instance selected");
+
+    const res = await fetch(`${backend.basePath}/session/${sessionId}/fork`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messageID }),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to fork session: ${res.status}`);
+    }
+
+    return res.json();
+  };
+}
+
+export function useRevertSession() {
+  const backend = useBackend();
+
+  return async (sessionId: string, messageID: string) => {
+    if (!backend) throw new Error("No instance selected");
+
+    const res = await fetch(`${backend.basePath}/session/${sessionId}/revert`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messageID }),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to revert session: ${res.status}`);
+    }
+
+    return res.json();
+  };
+}

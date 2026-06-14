@@ -9,6 +9,7 @@ import {
   CircleArrowUp,
   Cpu,
   Ellipsis,
+  EllipsisVertical,
   Eye,
   Feather,
   FileDiff,
@@ -46,6 +47,7 @@ import {
   Square,
   Sun,
   Trash2,
+  Undo2,
   User,
   X,
 } from "lucide-react";
@@ -121,3 +123,5 @@ export const IconUser = createAppIcon(User);
 export const IconListChecks = createAppIcon(ListChecks);
 export const SendIcon = createAppIcon(Send);
 export const StopIcon = createAppIcon(Square);
+export const UndoIcon = createAppIcon(Undo2);
+export const IconEllipsisVertical = createAppIcon(EllipsisVertical);

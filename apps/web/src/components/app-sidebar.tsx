@@ -55,7 +55,7 @@ import {
   useInstances,
 } from "@/hooks/use-opencode";
 import { useInstanceStore } from "@/stores/instance-store";
-import { useNavigate, useMatch } from "@tanstack/react-router";
+import { useNavigate, useMatch, useParams } from "@tanstack/react-router";
 import type { Session } from "@opencode-ai/sdk/v2";
 import type { BackendProvider } from "@/lib/backend-url";
 
@@ -191,6 +191,9 @@ export default function AppSidebar(
   const { data: hostnameData } = useHostname();
   const hostname = hostnameData?.hostname ?? "Loading...";
   const { data: sessionsData, mutate: mutateSessions } = useSessions();
+  const { id: activeSessionId } = useParams({ strict: false }) as {
+    id?: string;
+  };
   const createSession = useCreateSession();
   const deleteSession = useDeleteSession();
   const sessions: Session[] = sessionsData ?? [];
@@ -283,7 +286,16 @@ export default function AppSidebar(
 
           <SidebarSection label="Sessions">
             {sessions.map((session) => (
-              <SidebarItem key={session.id} tooltip={session.title}>
+              <SidebarItem
+                key={session.id}
+                tooltip={session.title}
+                isCurrent={session.id === activeSessionId}
+                className={
+                  session.id === activeSessionId
+                    ? "bg-sidebar-accent text-sidebar-accent-fg"
+                    : undefined
+                }
+              >
                 {({ isCollapsed, isFocused }) => (
                   <>
                     <SidebarLink href={`/session/${session.id}`}>

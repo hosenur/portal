@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState, useCallback, useMemo, memo } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -30,8 +30,25 @@ import {
   InformationCircleIcon,
   SendIcon,
   StopIcon,
+  UndoIcon,
+  IconEllipsisVertical,
+  IconGitBranch,
 } from "@/components/icons/lucide";
+import {
+  Menu,
+  MenuContent,
+  MenuItem,
+  MenuTrigger,
+} from "@/components/ui/menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTitle,
+  PopoverDescription,
+  PopoverClose,
+} from "@/components/ui/popover";
 import { useAgentStore } from "@/stores/agent-store";
+import { useDraftStore } from "@/stores/draft-store";
 import { useInstanceStore } from "@/stores/instance-store";
 import { useModelStore } from "@/stores/model-store";
 import { useBreadcrumb } from "@/contexts/breadcrumb-context";
@@ -52,6 +69,8 @@ import {
 } from "@/hooks/use-session-messages";
 import {
   useAbortSession,
+  useForkSession,
+  useRevertSession,
   useAgents,
   usePermissions,
   useQuestions,
@@ -1103,6 +1122,9 @@ const MessageItem = memo(function MessageItem({
   pendingQuestions,
   onPermissionResolved,
   onQuestionResolved,
+  showActions,
+  onFork,
+  onRevert,
 }: {
   message: MessageWithParts;
   port: number;
@@ -1112,6 +1134,9 @@ const MessageItem = memo(function MessageItem({
   pendingQuestions: QuestionRequest[];
   onPermissionResolved: (requestId: string) => void;
   onQuestionResolved: (requestId: string) => void;
+  showActions?: boolean;
+  onFork?: (messageId: string, text: string) => void;
+  onRevert?: (messageId: string) => void;
 }) {
   const textContent = getMessageContent(message.parts);
   const isAssistant = message.info.role === "assistant";
@@ -1154,6 +1179,30 @@ const MessageItem = memo(function MessageItem({
               />
             )}
           </div>
+          {!isAssistant && showActions && (
+            <Menu>
+              <MenuTrigger
+                aria-label="Message actions"
+                className="shrink-0 mt-1 p-0.5 rounded text-muted-fg hover:text-fg hover:bg-muted/60 transition-colors"
+              >
+                <IconEllipsisVertical size="14px" />
+              </MenuTrigger>
+              <MenuContent placement="bottom end">
+                <MenuItem
+                  onAction={() => onFork?.(message.info.id, textContent || "")}
+                >
+                  <IconGitBranch size="14px" className="mr-2" />
+                  Fork
+                </MenuItem>
+                <MenuItem
+                  onAction={() => onRevert?.(message.info.id)}
+                >
+                  <UndoIcon size="14px" className="mr-2" />
+                  Revert
+                </MenuItem>
+              </MenuContent>
+            </Menu>
+          )}
         </div>
       )}
       {toolCalls.length > 0 && (
@@ -1269,11 +1318,22 @@ function SessionPage() {
     supportsAgentSelection,
   ]);
 
+  const consumeDraft = useDraftStore((s) => s.consumeDraft);
+
   const [sendError, setSendError] = useState<string | null>(null);
+  const [confirmStopOpen, setConfirmStopOpen] = useState(false);
   const [input, setInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasScrolledInitially, setHasScrolledInitially] = useState(false);
   const [fileResults, setFileResults] = useState<string[]>([]);
+
+  useEffect(() => {
+    const draft = consumeDraft(sessionId);
+    if (draft) {
+      setInput(draft);
+    }
+  }, [sessionId, consumeDraft]);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1317,6 +1377,47 @@ function SessionPage() {
       );
     }
   }, [sessionId, abortSession, port, provider, mutateSessionStatuses]);
+
+  const navigate = useNavigate();
+  const forkSession = useForkSession();
+  const revertSession = useRevertSession();
+  const setDraft = useDraftStore((s) => s.setDraft);
+
+  const handleFork = useCallback(
+    async (messageId: string, text: string) => {
+      if (!sessionId) return;
+      try {
+        const newSession = await forkSession(sessionId, messageId);
+        if (text) {
+          setDraft(newSession.id, text);
+        }
+        mutateSessions();
+        navigate({ to: "/session/$id", params: { id: newSession.id } });
+      } catch (error) {
+        setSendError(
+          error instanceof Error ? error.message : "Failed to fork session",
+        );
+      }
+    },
+    [sessionId, forkSession, setDraft, mutateSessions, navigate],
+  );
+
+  const handleRevert = useCallback(
+    async (messageId: string) => {
+      if (!sessionId) return;
+      try {
+        await revertSession(sessionId, messageId);
+        mutateSessionMessages(port, sessionId, provider);
+        mutateSessions();
+        mutateSessionStatuses();
+      } catch (error) {
+        setSendError(
+          error instanceof Error ? error.message : "Failed to revert session",
+        );
+      }
+    },
+    [sessionId, revertSession, port, provider, mutateSessions, mutateSessionStatuses],
+  );
 
   const pendingPermissions = useMemo(
     () =>
@@ -1607,6 +1708,9 @@ function SessionPage() {
                 pendingQuestions={pendingQuestions}
                 onPermissionResolved={handlePermissionResolved}
                 onQuestionResolved={handleQuestionResolved}
+                showActions={provider === "opencode"}
+                onFork={handleFork}
+                onRevert={handleRevert}
               />
             ))}
           {unlinkedPermissions.length > 0 && (
@@ -1754,18 +1858,58 @@ function SessionPage() {
               rows={5}
             />
             {sending ? (
-              <Button
-                type="button"
-                onPress={handleAbort}
-                isCircle
-                size="sq-sm"
-                aria-label="Stop run"
-                className="absolute right-3 bottom-3"
-              >
-                <span className="grid size-4 place-items-center">
-                  <StopIcon size="14px" className="fill-current" />
-                </span>
-              </Button>
+              <Popover isOpen={confirmStopOpen} onOpenChange={setConfirmStopOpen}>
+                <Button
+                  type="button"
+                  isCircle
+                  size="sq-sm"
+                  aria-label="Stop run"
+                  className="absolute right-3 bottom-3"
+                >
+                  <span className="grid size-4 place-items-center">
+                    <StopIcon size="14px" className="fill-current" />
+                  </span>
+                </Button>
+                <PopoverContent
+                  placement="top end"
+                  className="w-72 max-w-[calc(100vw-2rem)] rounded-2xl p-0"
+                >
+                  <div className="flex flex-col gap-4 p-4">
+                    <div className="flex items-start gap-3">
+                      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-danger/12 text-danger">
+                        <StopIcon size="16px" className="fill-current" />
+                      </span>
+                      <div className="space-y-1 pt-0.5">
+                        <PopoverTitle className="font-semibold text-fg text-sm/5">
+                          Stop this run?
+                        </PopoverTitle>
+                        <PopoverDescription className="text-muted-fg text-xs/5">
+                          This cancels the current run. Any in-progress work will
+                          be aborted.
+                        </PopoverDescription>
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <PopoverClose
+                        size="sm"
+                        className="border-transparent bg-transparent text-muted-fg [background:transparent] [box-shadow:none] [--btn-shadow-ring:transparent] hover:text-fg hover:[background:color-mix(in_oklab,var(--color-fg)_8%,transparent)] pressed:[background:color-mix(in_oklab,var(--color-fg)_12%,transparent)]"
+                      >
+                        Keep running
+                      </PopoverClose>
+                      <Button
+                        size="sm"
+                        onPress={() => {
+                          setConfirmStopOpen(false);
+                          void handleAbort();
+                        }}
+                        className="border-transparent text-danger-fg [background:var(--color-danger)] [box-shadow:none] [--btn-shadow-ring:transparent] hover:[background:color-mix(in_oklab,var(--color-danger)_90%,black_10%)] pressed:[background:color-mix(in_oklab,var(--color-danger)_82%,black_18%)]"
+                      >
+                        Stop run
+                      </Button>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
             ) : (
               <Button
                 type="submit"
