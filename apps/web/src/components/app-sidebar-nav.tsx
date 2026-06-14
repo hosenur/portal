@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useMatch } from "@tanstack/react-router";
 import { Breadcrumbs, BreadcrumbsItem } from "@/components/ui/breadcrumbs";
 import { Button } from "@/components/ui/button";
@@ -7,14 +7,17 @@ import { toast } from "@/components/ui/toast";
 import {
   ArrowDownCircleIcon,
   ArrowUpCircleIcon,
+  IconGitBranch,
   IconGitPullRequest,
 } from "@/components/icons/lucide";
 import { useInstanceStore } from "@/stores/instance-store";
 import { useModelStore } from "@/stores/model-store";
 import { useBreadcrumb } from "@/contexts/breadcrumb-context";
-import { mutateSessionMessages } from "@/hooks/use-session-messages";
+import { useSessionMessages, mutateSessionMessages } from "@/hooks/use-session-messages";
 import { useSessions } from "@/hooks/use-opencode";
 import { backendBasePath } from "@/lib/backend-url";
+import { formatCost } from "@/lib/format";
+import type { SessionMessageAssistant } from "@opencode-ai/sdk/v2";
 
 const CREATE_PR_PROMPT = `Use gh CLI to create a pull request. Follow these steps:
 
@@ -74,12 +77,25 @@ export function AppSidebarNav() {
   const [isCreatingPR, setIsCreatingPR] = useState(false);
   const [isPulling, setIsPulling] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
+  const [showGitButtons, setShowGitButtons] = useState(false);
 
   const sessionMatch = useMatch({
     from: "/_app/session/$id",
     shouldThrow: false,
   });
   const sessionId = sessionMatch?.params?.id;
+
+  const { sessionMessages } = useSessionMessages(sessionId);
+
+  const sessionStats = useMemo(() => {
+    let totalCost = 0;
+    for (const msg of sessionMessages) {
+      if (msg.type !== "assistant") continue;
+      const am = msg as SessionMessageAssistant;
+      totalCost += am.cost ?? 0;
+    }
+    return { cost: totalCost };
+  }, [sessionMessages]);
 
   const sendPrompt = async (prompt: string) => {
     if (!sessionId || !port) {
@@ -160,35 +176,53 @@ export function AppSidebarNav() {
         </Breadcrumbs>
       </span>
       <span className="flex items-center gap-x-2 ml-auto">
+        {showGitButtons ? (
+          <>
+            <Button
+              size="xs"
+              intent="outline"
+              className="uppercase font-mono"
+              onPress={handlePull}
+              isDisabled={isLoading || !sessionId}
+            >
+              <ArrowDownCircleIcon size="14px" />
+              {isPulling ? "Pulling..." : "Pull"}
+            </Button>
+            <Button
+              size="xs"
+              intent="outline"
+              className="uppercase font-mono"
+              onPress={handlePush}
+              isDisabled={isLoading || !sessionId}
+            >
+              <ArrowUpCircleIcon size="14px" />
+              {isPushing ? "Pushing..." : "Push"}
+            </Button>
+            <Button
+              size="xs"
+              intent="outline"
+              className="uppercase font-mono"
+              onPress={handleCreatePR}
+              isDisabled={isLoading || !sessionId}
+            >
+              <IconGitPullRequest size="14px" />
+              {isCreatingPR ? "Creating..." : "PR"}
+            </Button>
+          </>
+        ) : (
+          <span className="flex items-center gap-2 text-xs text-muted-fg font-mono">
+            {sessionStats.cost > 0 && (
+              <span>{formatCost(sessionStats.cost)}</span>
+            )}
+          </span>
+        )}
         <Button
           size="xs"
           intent="outline"
           className="uppercase font-mono"
-          onPress={handlePull}
-          isDisabled={isLoading || !sessionId}
+          onPress={() => setShowGitButtons((v) => !v)}
         >
-          <ArrowDownCircleIcon size="14px" />
-          {isPulling ? "Pulling..." : "Pull"}
-        </Button>
-        <Button
-          size="xs"
-          intent="outline"
-          className="uppercase font-mono"
-          onPress={handlePush}
-          isDisabled={isLoading || !sessionId}
-        >
-          <ArrowUpCircleIcon size="14px" />
-          {isPushing ? "Pushing..." : "Push"}
-        </Button>
-        <Button
-          size="xs"
-          intent="outline"
-          className="uppercase font-mono"
-          onPress={handleCreatePR}
-          isDisabled={isLoading || !sessionId}
-        >
-          <IconGitPullRequest size="14px" />
-          {isCreatingPR ? "Creating..." : "Create PR"}
+          <IconGitBranch size="14px" />
         </Button>
       </span>
     </SidebarNav>
