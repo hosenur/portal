@@ -16,6 +16,7 @@
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types",
+    "release:local": "turbo run build && scripts/server.sh restart",
     "server": "scripts/server.sh",
     "server:start": "scripts/server.sh start",
     "server:stop": "scripts/server.sh stop",

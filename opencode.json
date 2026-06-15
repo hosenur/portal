@@ -6,7 +6,8 @@
       "command": [
         "npx",
         "-y",
-        "chrome-devtools-mcp@latest"
+        "chrome-devtools-mcp@latest",
+        "--isolated"
       ],
       "enabled": true
     }

@@ -215,6 +215,76 @@ function parseToolQuestions(part: ToolPart): QuestionInfo[] {
     .filter((q) => !!q.question);
 }
 
+type QuestionAnswers = { chosen: string[]; typed: string[] };
+
+/**
+ * Parse the submitted answers from a completed question tool part.
+ *
+ * Answers can be stored in several shapes depending on the backend:
+ *  - `state.metadata.answers` as string[][] indexed by question position
+ *    (native opencode)
+ *  - `state.input.answers` as a record keyed by question text ->
+ *    string (single/custom) | string[] (multi) (Claude backend)
+ *  - `state.input.answers` as string[][] indexed by question position (fallback)
+ *
+ * Returns one entry per question split into `chosen` (matches an option label)
+ * and `typed` (freeform/custom answers that match no option). Returns null when
+ * no answers are present (e.g. codex), so the caller can fall back to the
+ * plain read-only list.
+ */
+function parseQuestionAnswers(
+  part: ToolPart,
+  questions: QuestionInfo[],
+): QuestionAnswers[] | null {
+  const state = (part.state || {}) as Record<string, unknown>;
+  const metadata = (state.metadata || {}) as Record<string, unknown>;
+  const input = (state.input || {}) as Record<string, unknown>;
+
+  const rawMeta = metadata.answers;
+  const rawInput = input.answers;
+
+  const metaArray = Array.isArray(rawMeta) ? (rawMeta as unknown[]) : null;
+  const inputArray = Array.isArray(rawInput) ? (rawInput as unknown[]) : null;
+  const inputRecord =
+    !inputArray && rawInput && typeof rawInput === "object"
+      ? (rawInput as Record<string, unknown>)
+      : null;
+
+  if (!metaArray && !inputArray && !inputRecord) return null;
+
+  const toStringArray = (value: unknown): string[] => {
+    if (Array.isArray(value)) {
+      return value
+        .map((v) => (typeof v === "string" ? v : String(v ?? "")))
+        .filter((v) => v.length > 0);
+    }
+    if (typeof value === "string") {
+      return value.length > 0 ? [value] : [];
+    }
+    if (typeof value === "number" || typeof value === "boolean") {
+      return [String(value)];
+    }
+    return [];
+  };
+
+  return questions.map((q, idx) => {
+    let rawValue: unknown;
+    if (metaArray) rawValue = metaArray[idx];
+    else if (inputRecord) rawValue = inputRecord[q.question];
+    else rawValue = inputArray?.[idx];
+
+    const values = toStringArray(rawValue);
+    const optionLabels = new Set(q.options.map((opt) => opt.label));
+    const chosen: string[] = [];
+    const typed: string[] = [];
+    for (const value of values) {
+      if (optionLabels.has(value)) chosen.push(value);
+      else typed.push(value);
+    }
+    return { chosen, typed };
+  });
+}
+
 function formatToolCall(part: ToolPart): {
   icon: React.ReactNode;
   label: string;
@@ -356,48 +426,99 @@ function formatToolCall(part: ToolPart): {
 function QuestionDisplay({
   questions,
   partKey,
+  answers,
 }: {
   questions: QuestionInfo[];
   partKey: string;
+  answers?: QuestionAnswers[] | null;
 }) {
   return (
     <>
-      {questions.map((q, idx) => (
-        <div key={`${partKey}-q-${idx}`} className="space-y-1">
-          {(q.header || q.multiple) && (
-            <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-fg">
-              {q.header && <span>{q.header}</span>}
-              {q.multiple && (
-                <span className="rounded border border-warning/50 bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">
-                  Multi-select
-                </span>
-              )}
-            </div>
-          )}
-          <p className="text-xs leading-relaxed">{q.question}</p>
+      {questions.map((q, idx) => {
+        const answer = answers?.[idx];
+        const chosen = answer ? new Set(answer.chosen) : null;
+        const typed = answer?.typed ?? [];
+        const isAnswered = !!answer && (answer.chosen.length > 0 || typed.length > 0);
 
-          {q.options.length > 0 && (
-            <ul className="space-y-1 ml-3 list-disc text-muted-fg">
-              {q.options.map((opt, optIdx) => (
-                <li key={`opt-${idx}-${optIdx}`}>
-                  <span className="text-fg">{opt.label}</span>
-                  {opt.description && (
-                    <span className="text-muted-fg"> - {opt.description}</span>
-                  )}
-                </li>
+        return (
+          <div key={`${partKey}-q-${idx}`} className="space-y-1.5">
+            {(q.header || q.multiple) && (
+              <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-fg">
+                {q.header && <span>{q.header}</span>}
+                {q.multiple && (
+                  <span className="rounded border border-warning/50 bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">
+                    Multi-select
+                  </span>
+                )}
+              </div>
+            )}
+            <p className="text-xs leading-relaxed">{q.question}</p>
+
+            {q.options.length > 0 &&
+              (chosen ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {q.options.map((opt, optIdx) => {
+                    const isSelected = chosen.has(opt.label);
+                    return (
+                      <span
+                        key={`opt-${idx}-${optIdx}`}
+                        className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs ${
+                          isSelected
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border/60 bg-bg text-muted-fg/60"
+                        }`}
+                      >
+                        {isSelected && <CheckIcon size="12px" />}
+                        <span>{opt.label}</span>
+                        {opt.description && (
+                          <span className="opacity-60"> - {opt.description}</span>
+                        )}
+                      </span>
+                    );
+                  })}
+                </div>
+              ) : (
+                <ul className="space-y-1 ml-3 list-disc text-muted-fg">
+                  {q.options.map((opt, optIdx) => (
+                    <li key={`opt-${idx}-${optIdx}`}>
+                      <span className="text-fg">{opt.label}</span>
+                      {opt.description && (
+                        <span className="text-muted-fg"> - {opt.description}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               ))}
-            </ul>
-          )}
 
-          {(q.multiple || q.custom) && (
-            <div className="text-[11px] text-muted-fg">
-              {q.multiple && "You can select multiple options"}
-              {q.multiple && q.custom && " | "}
-              {q.custom && "Custom answer allowed"}
-            </div>
-          )}
-        </div>
-      ))}
+            {typed.length > 0 && (
+              <div className="space-y-1">
+                <div className="text-[11px] uppercase tracking-wide text-muted-fg">
+                  Your answer
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {typed.map((value, tIdx) => (
+                    <span
+                      key={`typed-${idx}-${tIdx}`}
+                      className="inline-flex items-center gap-1 rounded-md border border-primary bg-primary/10 px-2 py-1 text-xs text-primary"
+                    >
+                      <CheckIcon size="12px" />
+                      <span>{value}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!isAnswered && (q.multiple || q.custom) && (
+              <div className="text-[11px] text-muted-fg">
+                {q.multiple && "You can select multiple options"}
+                {q.multiple && q.custom && " | "}
+                {q.custom && "Custom answer allowed"}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </>
   );
 }
@@ -1086,6 +1207,7 @@ const ToolCallItem = memo(function ToolCallItem({
             <QuestionDisplay
               questions={questions}
               partKey={part.callID || part.id}
+              answers={parseQuestionAnswers(part, questions)}
             />
           </div>
         )}
