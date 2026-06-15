@@ -40,3 +40,4 @@ yarn-error.log*
 .DS_Store
 *.pem
 .idea/
+gdb/
