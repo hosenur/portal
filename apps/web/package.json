@@ -22,6 +22,7 @@
     "react-aria-components": "^1.17.0",
     "react-dom": "^19.2.6",
     "react-markdown": "^10.1.0",
+    "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.1",
     "sonner": "^2.0.7",
     "swr": "^2.4.1",

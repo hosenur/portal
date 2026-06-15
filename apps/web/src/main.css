@@ -375,3 +375,8 @@ body {
 .dark .diff-code-delete {
   background-color: oklch(0.577 0.245 27.325 / 0.1);
 }
+
+.prose :where(code):not(:where(pre code)) {
+  overflow-wrap: break-word;
+  word-break: break-all;
+}
