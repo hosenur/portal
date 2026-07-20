@@ -742,7 +742,7 @@ const MessageItem = memo(function MessageItem({
           ) : (
             <IconUser size="16px" className="shrink-0 mt-1" />
           )}
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             {!isAssistant && message.isQueued && (
               <Badge intent="warning" className="mb-1">
                 Queued
