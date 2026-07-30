@@ -182,7 +182,114 @@ function parseLsof(output: string): ListeningPort[] {
   return ports;
 }
 
-async function getListeningPorts(): Promise<ListeningPort[]> {
+async function getListeningPortsWindows(): Promise<ListeningPort[]> {
+  const output = await runCommand("netstat", [
+    "-ano",
+    "-p",
+    "tcp",
+  ]);
+
+  const seen = new Set<string>();
+  const ports: ListeningPort[] = [];
+
+  const lines = output.split("\n");
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    if (!trimmed.startsWith("TCP")) continue;
+
+    const parts = trimmed.split(/\s+/);
+
+    // TCP  127.0.0.1:3000  0.0.0.0:0  LISTENING  12345
+    const localAddress = parts[1];
+    const state = parts[3];
+    const pidString = parts[4];
+
+    if (state !== "LISTENING") continue;
+
+    const pid = Number(pidString);
+
+    const { host, port } = parseWindowsAddress(localAddress);
+
+    const key = `${host}:${port}:${pid}`;
+
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    ports.push({
+      pid: Number.isNaN(pid) ? null : pid,
+      command: null,
+      port,
+      host,
+    });
+  }
+
+  // Resolve commands after collecting ports
+  const commands = await getWindowsProcessNames(
+    ports
+      .map((p) => p.pid)
+      .filter((pid): pid is number => pid !== null)
+  );
+
+  for (const item of ports) {
+    if (item.pid !== null) {
+      item.command = commands.get(item.pid) ?? null;
+    }
+  }
+
+  return ports;
+}
+
+function parseWindowsAddress(address: string) {
+  // IPv6 format: [::1]:3000
+  if (address.startsWith("[")) {
+    const end = address.lastIndexOf("]");
+
+    return {
+      host: address.slice(0, end + 1),
+      port: Number(address.slice(end + 2)),
+    };
+  }
+
+  const index = address.lastIndexOf(":");
+
+  return {
+    host: address.slice(0, index),
+    port: Number(address.slice(index + 1)),
+  };
+}
+
+async function getWindowsProcessNames(
+  pids: number[]
+): Promise<Map<number, string>> {
+  const map = new Map<number, string>();
+
+  if (pids.length === 0) return map;
+
+  const output = await runCommand("tasklist", [
+    "/FO",
+    "CSV",
+    "/NH",
+  ]);
+
+  for (const line of output.split("\n")) {
+    const match = line.match(/^"(.+?)","(\d+)"/);
+
+    if (!match) continue;
+
+    const command = match[1];
+    const pid = Number(match[2]);
+
+    if (pids.includes(pid)) {
+      map.set(pid, command);
+    }
+  }
+
+  return map;
+}
+
+async function getListeningPortsUnix(): Promise<ListeningPort[]> {
   const output = await runCommand("lsof", [
     "-nP",
     "-iTCP",
@@ -201,7 +308,16 @@ async function getListeningPorts(): Promise<ListeningPort[]> {
     ports.push(item);
   }
 
+
   return ports;
+}
+
+async function getListeningPorts(): Promise<ListeningPort[]> {
+  if (process.platform === "win32") {
+    return getListeningPortsWindows();
+  }
+
+  return getListeningPortsUnix();
 }
 
 function getProbeHosts(host: string): string[] {

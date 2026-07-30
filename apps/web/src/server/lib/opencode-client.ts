@@ -27,7 +27,7 @@ function getHostnameForPort(port: number): string {
   } catch {
     // Fall back to localhost
   }
-  return "localhost";
+  return "127.0.0.1";
 }
 
 export function getOpencodeBaseUrl(port: number) {
