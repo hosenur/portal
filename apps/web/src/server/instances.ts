@@ -224,6 +224,16 @@ function formatUrlHost(host: string): string {
   return host.includes(":") ? `[${host}]` : host;
 }
 
+function getAuthHeaders(): Record<string, string> | undefined {
+  const username = process.env.OPENCODE_SERVER_USERNAME;
+  const password = process.env.OPENCODE_SERVER_PASSWORD;
+  if (username && password) {
+    return {
+      Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`,
+    };
+  }
+}
+
 async function fetchJson<T>(
   url: string,
   options: { headers?: HeadersInit; timeoutMs?: number } = {},
@@ -239,6 +249,7 @@ async function fetchJson<T>(
       headers: {
         Accept: "application/json",
         ...options.headers,
+        ...getAuthHeaders(),
       },
       signal: controller.signal,
     });
@@ -629,9 +640,10 @@ export default defineHandler(async () => {
       version: "claude sdk",
       sessionStats: null,
       state: "running" as const,
-      status: webRunning && instance.startedAt
-        ? `Managed by OpenPortal since ${new Date(instance.startedAt).toLocaleString()}`
-        : "Registered by openportal run",
+      status:
+        webRunning && instance.startedAt
+          ? `Managed by OpenPortal since ${new Date(instance.startedAt).toLocaleString()}`
+          : "Registered by openportal run",
     };
   });
 
