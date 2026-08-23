@@ -195,3 +195,17 @@ http://myserver:3002  # project-b
 - Portal is only accessible via your Tailscale network
 - No ports need to be exposed to the public internet
 - Consider using [Tailscale ACLs](https://tailscale.com/kb/1018/acls) for additional access control
+
+## Optional: Build Remote Agent spectator
+
+Portal is the full mobile UI over Tailscale. You can **also** pair a second device with [Build Remote Agent](https://grokbuildremote.com/) so a phone spectates (and can veto) without orchestrating. Protocol `gbr/1`. Independent product; not affiliated with xAI or SpaceX.
+
+On the same host that runs Portal + OpenCode:
+
+```bash
+curl -fsSL https://grokbuildremote.com/install.sh | bash
+gbr-agent version    # need v0.6.0+
+gbr-agent pair && gbr-agent run
+```
+
+Phone: open Build Remote Agent → scan the QR (or type the 8-char code). Attach only at `http://127.0.0.1:8788` (Bot API) or MCP stdio `gbr-mcp` from [GrokBuildRemote-Agents](https://github.com/LinespottingOrg/GrokBuildRemote-Agents). Do not expose `:8788` on the Tailnet unless you intend to; loopback is the supported attach surface. Never put mailbox keys in git.
