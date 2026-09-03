@@ -52,6 +52,15 @@ export function useSessionMessages(id: string | null) {
   );
 }
 
+export function useSessionChildren(id: string | null) {
+  const backend = useBackend();
+
+  return useSWR(
+    backend && id ? `${backend.basePath}/session/${id}/children` : null,
+    fetcher,
+  );
+}
+
 export function useSessionStatuses() {
   const backend = useBackend();
 
