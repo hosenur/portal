@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState, useCallback, useMemo, memo } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -8,6 +8,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader } from "@/components/ui/loader";
+import {
+  Menu,
+  MenuContent,
+  MenuHeader,
+  MenuItem,
+  MenuSection,
+  MenuTrigger,
+} from "@/components/ui/menu";
+import type { SessionStatus } from "@opencode-ai/sdk/v2";
 import { AgentSelect } from "@/components/agent-select";
 import { ModelSelect } from "@/components/model-select";
 import {
@@ -23,6 +32,7 @@ import {
   IconUser,
   InformationCircleIcon,
   SendIcon,
+  ChevronDownIcon,
 } from "@/components/icons/lucide";
 import { useAgentStore } from "@/stores/agent-store";
 import { useInstanceStore } from "@/stores/instance-store";
@@ -47,12 +57,14 @@ import {
   useAgents,
   usePermissions,
   useQuestions,
+  useSessionChildren,
   useSessionStatuses,
   useSessions,
 } from "@/hooks/use-opencode";
 import {
   getDefaultUserSelectableAgentName,
   isValidUserSelectableAgent,
+  extractSubagentMentions,
 } from "@/lib/agent-selection";
 import { getErrorMessage, getResponseErrorMessage } from "@/lib/error-message";
 import { backendBasePath, type BackendProvider } from "@/lib/backend-url";
@@ -808,6 +820,7 @@ function hasVisibleContent(message: MessageWithParts): boolean {
 function SessionPage() {
   const { id: sessionId } = Route.useParams();
   const instance = useInstanceStore((s) => s.instance);
+  const navigate = useNavigate();
   const port = instance?.port ?? 0;
   const provider = instance?.provider;
   const supportsAgentSelection = provider === "opencode";
@@ -820,6 +833,7 @@ function SessionPage() {
     error: messagesError,
   } = useSessionMessages(sessionId);
   const { data: sessionsData, mutate: mutateSessions } = useSessions();
+  const { data: childrenData } = useSessionChildren(sessionId);
   const { data: agentsData } = useAgents();
   const { data: sessionStatusesData, mutate: mutateSessionStatuses } =
     useSessionStatuses();
@@ -833,6 +847,7 @@ function SessionPage() {
   const sessions: Session[] = sessionsData ?? [];
   const agents: Agent[] = agentsData ?? [];
   const currentSession = sessions.find((s) => s.id === sessionId);
+  const childSessions: Session[] = childrenData ?? [];
 
   useEffect(() => {
     if (currentSession?.title) {
@@ -862,7 +877,9 @@ function SessionPage() {
   const [input, setInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasScrolledInitially, setHasScrolledInitially] = useState(false);
-  const [fileResults, setFileResults] = useState<string[]>([]);
+  const [mentionResults, setMentionResults] = useState<
+    { type: "agent" | "file"; value: string }[]
+  >([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1025,6 +1042,7 @@ function SessionPage() {
           body: JSON.stringify({
             messageID: messageId,
             text: messageText,
+            subagents: extractSubagentMentions(messageText, agents),
             model:
               selectedModel.providerID && selectedModel.modelID
                 ? selectedModel
@@ -1146,6 +1164,41 @@ function SessionPage() {
 
   return (
     <div className="flex h-full flex-col -m-4">
+      {childSessions.length > 0 && (
+        <div className="flex items-center gap-2 px-6 py-3 shrink-0 border-b border-dashed border-border">
+          <Menu>
+            <MenuTrigger
+              aria-label="Subagent sessions"
+              className="flex items-center gap-1.5 text-sm text-muted-fg hover:text-fg outline-hidden rounded-md px-2 py-1 hover:bg-muted"
+            >
+              <span className="flex size-2 rounded-full bg-primary" />
+              Subagents
+              <ChevronDownIcon className="size-3.5" />
+            </MenuTrigger>
+            <MenuContent>
+              <MenuSection>
+                <MenuHeader separator>
+                  Subagent sessions ({childSessions.length})
+                </MenuHeader>
+                {childSessions.map((child) => (
+                  <MenuItem
+                    key={child.id}
+                    onAction={() =>
+                      navigate({
+                        to: "/session/$id",
+                        params: { id: child.id },
+                      })
+                    }
+                  >
+                    <span className="size-2 rounded-full bg-muted-fg" />
+                    {child.title || child.id}
+                  </MenuItem>
+                ))}
+              </MenuSection>
+            </MenuContent>
+          </Menu>
+        </div>
+      )}
       <div
         className="flex-1 overflow-auto overflow-x-hidden"
         ref={chatContainerRef}
@@ -1218,10 +1271,11 @@ function SessionPage() {
           mentionStart={fileMention.mentionStart}
           selectedIndex={fileMention.selectedIndex}
           onSelectedIndexChange={fileMention.setSelectedIndex}
-          onFilesChange={setFileResults}
+          onResultsChange={setMentionResults}
           onClose={fileMention.close}
-          onSelect={(filePath) => {
-            const newValue = fileMention.handleSelect(filePath, input);
+          agents={agents}
+          onSelect={(value) => {
+            const newValue = fileMention.handleSelect(value, input);
             setInput(newValue);
           }}
         />
@@ -1263,17 +1317,17 @@ function SessionPage() {
               onKeyDown={(e) => {
                 const handled = fileMention.handleKeyDown(
                   e,
-                  fileResults.length,
+                  mentionResults.length,
                 );
                 if (handled) {
                   if (
                     (e.key === "Enter" || e.key === "Tab") &&
-                    fileResults.length > 0
+                    mentionResults.length > 0
                   ) {
-                    const selectedFile = fileResults[fileMention.selectedIndex];
-                    if (selectedFile) {
+                    const selected = mentionResults[fileMention.selectedIndex];
+                    if (selected) {
                       const newValue = fileMention.handleSelect(
-                        selectedFile,
+                        selected.value,
                         input,
                       );
                       setInput(newValue);
@@ -1288,7 +1342,7 @@ function SessionPage() {
                   }
                 }
               }}
-              placeholder="Type your message... (use @ to mention files)"
+              placeholder="Type your message... (use @ to mention files or subagents)"
               className="min-h-32 max-h-32 w-full resize-none overflow-y-auto pr-14 pb-12"
               rows={5}
             />

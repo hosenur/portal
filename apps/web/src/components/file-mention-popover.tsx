@@ -3,6 +3,12 @@ import { useEffect, useRef, useState } from "react";
 import useMediaQuery from "@/hooks/use-media-query";
 import { useInstanceStore } from "@/stores/instance-store";
 import { backendBasePath } from "@/lib/backend-url";
+import type { Agent } from "@opencode-ai/sdk/v2";
+import {
+  SubagentMentionRows,
+  subagentResults,
+  type MentionResult,
+} from "@/components/subagent-mention";
 
 interface FileResult {
   path: string;
@@ -98,13 +104,14 @@ function getCaretCoordinates(
 interface FileMentionPopoverProps {
   isOpen: boolean;
   searchQuery: string;
-  onSelect: (filePath: string) => void;
+  onSelect: (value: string) => void;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   mentionStart: number | null;
   selectedIndex: number;
   onSelectedIndexChange: (index: number) => void;
-  onFilesChange?: (files: string[]) => void;
+  onResultsChange?: (results: MentionResult[]) => void;
   onClose: () => void;
+  agents?: Agent[];
 }
 
 export function FileMentionPopover({
@@ -115,8 +122,9 @@ export function FileMentionPopover({
   mentionStart,
   selectedIndex,
   onSelectedIndexChange,
-  onFilesChange,
+  onResultsChange,
   onClose,
+  agents = [],
 }: FileMentionPopoverProps) {
   const [files, setFiles] = useState<FileResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -127,6 +135,9 @@ export function FileMentionPopover({
   const instance = useInstanceStore((s) => s.instance);
   const port = instance?.port;
   const apiBase = port ? backendBasePath(instance?.provider, port) : "";
+
+  const agentResults = subagentResults(agents, searchQuery);
+  const totalResults = agentResults.length + files.length;
 
   useEffect(() => {
     if (isOpen && mentionStart !== null && textareaRef.current) {
@@ -154,7 +165,7 @@ export function FileMentionPopover({
   useEffect(() => {
     if (!isOpen || !searchQuery || !port) {
       setFiles([]);
-      onFilesChange?.([]);
+      onResultsChange?.(subagentResults(agents, searchQuery));
       return;
     }
 
@@ -174,7 +185,10 @@ export function FileMentionPopover({
             name: path.split("/").pop() || path,
           }));
           setFiles(mappedFiles);
-          onFilesChange?.(mappedFiles.map((f) => f.path));
+          onResultsChange?.([
+            ...subagentResults(agents, searchQuery),
+            ...mappedFiles.map((f) => ({ type: "file" as const, value: f.path })),
+          ]);
         }
       } catch (err) {
         if ((err as Error).name !== "AbortError") {
@@ -190,10 +204,11 @@ export function FileMentionPopover({
       clearTimeout(debounceTimer);
       controller.abort();
     };
-  }, [isOpen, searchQuery, port, apiBase, onFilesChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, searchQuery, port, apiBase, agents, onResultsChange]);
 
   useEffect(() => {
-    if (listRef.current && files.length > 0) {
+    if (listRef.current && totalResults > 0) {
       const selectedElement = listRef.current.children[
         selectedIndex
       ] as HTMLElement;
@@ -201,7 +216,7 @@ export function FileMentionPopover({
         selectedElement.scrollIntoView({ block: "nearest" });
       }
     }
-  }, [selectedIndex, files.length]);
+  }, [selectedIndex, totalResults]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -225,6 +240,65 @@ export function FileMentionPopover({
     };
   }, [isOpen, onClose, textareaRef]);
 
+  const renderRows = (hoverClassName: string) => (
+    <>
+      <SubagentMentionRows
+        agents={agents}
+        query={searchQuery}
+        selectedIndex={selectedIndex}
+        onSelect={onSelect}
+        onSelectedIndexChange={onSelectedIndexChange}
+      />
+
+      {agentResults.length > 0 && files.length > 0 && (
+        <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-muted-fg/60">
+          Files
+        </div>
+      )}
+
+      {files.map((file, index) => {
+        const absIndex = agentResults.length + index;
+        const isSelected = absIndex === selectedIndex;
+        return (
+          <button
+            type="button"
+            key={file.path}
+            className={`flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-sm transition-all duration-150 ${
+              isSelected ? "bg-primary/10 text-primary-fg" : hoverClassName
+            }`}
+            onClick={() => onSelect(file.path)}
+            onMouseEnter={() => onSelectedIndexChange(absIndex)}
+            onTouchEnd={() => onSelect(file.path)}
+          >
+            <div
+              className={`flex shrink-0 items-center justify-center rounded-md p-1.5 ${
+                isSelected ? "bg-primary text-primary-fg" : "bg-muted text-muted-fg"
+              }`}
+            >
+              <DocumentIcon className="size-4" />
+            </div>
+            <div className="flex flex-col min-w-0 flex-1">
+              <span
+                className={`font-medium truncate leading-tight ${
+                  isSelected ? "text-primary-fg" : "text-foreground"
+                }`}
+              >
+                {file.name}
+              </span>
+              <span
+                className={`text-[10px] truncate leading-tight ${
+                  isSelected ? "text-primary-fg/70" : "text-muted-fg/70"
+                }`}
+              >
+                {file.path}
+              </span>
+            </div>
+          </button>
+        );
+      })}
+    </>
+  );
+
   if (!isOpen) return null;
   if (!isMobile && !position) return null;
 
@@ -235,60 +309,20 @@ export function FileMentionPopover({
         className="absolute bottom-full left-5 right-5 mb-3 z-50 rounded-xl border border-border/50 bg-background/95 backdrop-blur-xl shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-200"
       >
         <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-muted-fg/80 border-b border-border/40 bg-muted/20 rounded-t-xl">
-          {loading ? "Searching..." : `Files matching "${searchQuery}"`}
+          {loading ? "Searching..." : `Matching "${searchQuery}"`}
         </div>
         <div
           ref={listRef}
           className="max-h-56 overflow-y-auto p-1.5 scrollbar-hide"
         >
-          {files.length === 0 && !loading && (
+          {totalResults === 0 && (
             <div className="px-3 py-4 text-center text-sm text-muted-fg/60">
-              No files found
+              {loading ? "Searching..." : "No matching agents or files"}
             </div>
           )}
-          {files.map((file, index) => (
-            <button
-              type="button"
-              key={file.path}
-              className={`flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-sm transition-all duration-150 ${
-                index === selectedIndex
-                  ? "bg-primary/10 text-primary-fg"
-                  : "hover:bg-muted/50 active:bg-muted/70 text-foreground"
-              }`}
-              onClick={() => onSelect(file.path)}
-              onTouchEnd={() => onSelect(file.path)}
-            >
-              <div
-                className={`flex shrink-0 items-center justify-center rounded-md p-1.5 ${
-                  index === selectedIndex
-                    ? "bg-primary text-primary-fg"
-                    : "bg-muted text-muted-fg"
-                }`}
-              >
-                <DocumentIcon className="size-4" />
-              </div>
-              <div className="flex flex-col min-w-0 flex-1">
-                <span
-                  className={`font-medium truncate leading-tight ${
-                    index === selectedIndex
-                      ? "text-primary-fg"
-                      : "text-foreground"
-                  }`}
-                >
-                  {file.name}
-                </span>
-                <span
-                  className={`text-[10px] truncate leading-tight ${
-                    index === selectedIndex
-                      ? "text-primary-fg/70"
-                      : "text-muted-fg/70"
-                  }`}
-                >
-                  {file.path}
-                </span>
-              </div>
-            </button>
-          ))}
+          {renderRows(
+            "hover:bg-muted/50 active:bg-muted/70 text-foreground",
+          )}
         </div>
       </div>
     );
@@ -307,64 +341,24 @@ export function FileMentionPopover({
       style={desktopStyle}
     >
       <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-muted-fg/80 border-b border-border/40 bg-muted/20 rounded-t-xl">
-        {loading ? "Searching..." : `Files matching "${searchQuery}"`}
+        {loading ? "Searching..." : `Matching "${searchQuery}"`}
       </div>
       <div
         ref={listRef}
         className="max-h-[300px] overflow-y-auto p-1.5 scrollbar-thin scrollbar-thumb-border/50 scrollbar-track-transparent"
       >
-        {files.length === 0 && !loading && (
+        {totalResults === 0 && (
           <div className="px-3 py-4 text-center text-sm text-muted-fg/60">
-            No files found
+            {loading ? "Searching..." : "No matching agents or files"}
           </div>
         )}
-        {files.map((file, index) => (
-          <button
-            type="button"
-            key={file.path}
-            className={`flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-sm transition-all duration-150 ${
-              index === selectedIndex
-                ? "bg-primary/10 text-primary-fg"
-                : "hover:bg-muted/50 text-foreground"
-            }`}
-            onClick={() => onSelect(file.path)}
-            onMouseEnter={() => onSelectedIndexChange(index)}
-          >
-            <div
-              className={`flex shrink-0 items-center justify-center rounded-md p-1.5 ${
-                index === selectedIndex
-                  ? "bg-primary text-primary-fg"
-                  : "bg-muted text-muted-fg"
-              }`}
-            >
-              <DocumentIcon className="size-4" />
-            </div>
-            <div className="flex flex-col min-w-0 flex-1">
-              <span
-                className={`font-medium truncate leading-tight ${
-                  index === selectedIndex
-                    ? "text-primary-fg"
-                    : "text-foreground"
-                }`}
-              >
-                {file.name}
-              </span>
-              <span
-                className={`text-[10px] truncate leading-tight ${
-                  index === selectedIndex
-                    ? "text-primary-fg/70"
-                    : "text-muted-fg/70"
-                }`}
-              >
-                {file.path}
-              </span>
-            </div>
-          </button>
-        ))}
+{renderRows(
+            "hover:bg-muted/50 text-foreground",
+          )}
+        </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
 interface UseMentionResult {
   isOpen: boolean;
@@ -372,8 +366,8 @@ interface UseMentionResult {
   selectedIndex: number;
   mentionStart: number | null;
   handleInputChange: (value: string, cursorPosition: number) => void;
-  handleKeyDown: (e: React.KeyboardEvent, filesCount: number) => boolean;
-  handleSelect: (filePath: string, currentValue: string) => string;
+  handleKeyDown: (e: React.KeyboardEvent, resultsCount: number) => boolean;
+  handleSelect: (value: string, currentValue: string) => string;
   close: () => void;
   setSelectedIndex: (index: number) => void;
 }
@@ -410,19 +404,19 @@ export function useFileMention(): UseMentionResult {
 
   const handleKeyDown = (
     e: React.KeyboardEvent,
-    filesCount: number,
+    resultsCount: number,
   ): boolean => {
     if (!isOpen) return false;
 
     switch (e.key) {
       case "ArrowDown":
         e.preventDefault();
-        setSelectedIndex((prev) => (prev + 1) % Math.max(filesCount, 1));
+        setSelectedIndex((prev) => (prev + 1) % Math.max(resultsCount, 1));
         return true;
       case "ArrowUp":
         e.preventDefault();
         setSelectedIndex((prev) =>
-          prev - 1 < 0 ? Math.max(filesCount - 1, 0) : prev - 1,
+          prev - 1 < 0 ? Math.max(resultsCount - 1, 0) : prev - 1,
         );
         return true;
       case "Escape":
@@ -431,7 +425,7 @@ export function useFileMention(): UseMentionResult {
         return true;
       case "Tab":
       case "Enter":
-        if (filesCount > 0) {
+        if (resultsCount > 0) {
           e.preventDefault();
           return true;
         }
@@ -441,14 +435,14 @@ export function useFileMention(): UseMentionResult {
     }
   };
 
-  const handleSelect = (filePath: string, currentValue: string): string => {
+  const handleSelect = (value: string, currentValue: string): string => {
     if (mentionStart === null) return currentValue;
 
     const beforeMention = currentValue.slice(0, mentionStart);
     const afterMention = currentValue.slice(
       mentionStart + 1 + searchQuery.length,
     );
-    const newValue = `${beforeMention}@${filePath} ${afterMention}`;
+    const newValue = `${beforeMention}@${value} ${afterMention}`;
 
     close();
     return newValue;
